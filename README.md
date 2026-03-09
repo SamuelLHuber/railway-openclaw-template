@@ -71,9 +71,10 @@ The Dockerfile does two things:
 
 In your Railway service, go to **Variables** and add:
 
-| Variable | Value | Notes |
+| Variable | Required | Description |
 |---|---|---|
-| `OPENCLAW_GATEWAY_TOKEN` | `openssl rand -hex 32` | **Required.** Secures the gateway API. Generate a random token locally. |
+| `OPENCLAW_GATEWAY_TOKEN` | ✅ | Auth token for the gateway API. Generate: `openssl rand -hex 32` |
+| `PORT` | Recommended | Port the gateway listens on. Default: `8080`. Railway auto-detects this. |
 | At least one provider key | See [providers](#adding-model-providers) | Without a provider key the gateway starts but can't answer messages. |
 
 Optional but recommended:
@@ -290,6 +291,7 @@ This always pulls the newest image but you lose reproducibility and rollback abi
 | Variable | Required | Description |
 |---|---|---|
 | `OPENCLAW_GATEWAY_TOKEN` | ✅ | Auth token for the gateway. Generate: `openssl rand -hex 32` |
+| `PORT` | Recommended | Port for the gateway (default: `8080`) |
 | `SETUP_PASSWORD` | Recommended | Protects the `/setup` web wizard |
 | `OPENCLAW_STATE_DIR` | If using volume | State directory (default: `~/.openclaw`) |
 | `OPENCLAW_WORKSPACE_DIR` | If using volume | Workspace directory |
@@ -375,7 +377,7 @@ This is normal on first connection. See [device pairing](#device-pairing).
 
 | | This template | codetitlan template |
 |---|---|---|
-| **Deploy time** | ~30 seconds (image pull) | 10-15+ minutes (full source build) |
+| **Deploy time** | ~30s build + ~30s health check | 10-15+ minutes (full source build) |
 | **How it works** | `FROM ghcr.io/openclaw/openclaw` | Clones repo, `pnpm install`, TypeScript build, UI bundle |
 | **Upgrades** | Change version tag, redeploy | Re-clone, rebuild everything |
 | **Auto-updates** | GitHub Actions PR workflow | Manual |

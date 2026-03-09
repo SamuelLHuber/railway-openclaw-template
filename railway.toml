@@ -3,10 +3,9 @@
 dockerfilePath = "Dockerfile"
 
 [deploy]
-# Railway health checks
+# Railway health checks — the gateway needs ~15s to start
 healthcheckPath = "/healthz"
-healthcheckTimeout = 10
-startCommand = ""
+healthcheckTimeout = 300
 # Let Dockerfile CMD handle the start
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 5
