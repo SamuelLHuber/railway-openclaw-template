@@ -47,6 +47,7 @@ ENV OPENCLAW_GATEWAY_PORT=8080
 # 3. Start the gateway (runs as root — isolated Railway container)
 USER root
 CMD ["sh", "-c", "\
+  export HOME=/data && \
   mkdir -p /data/.openclaw /data/workspace && \
   if [ ! -f /data/.openclaw/openclaw.json ]; then \
     cp /app/seed/openclaw.json /data/.openclaw/openclaw.json; \
