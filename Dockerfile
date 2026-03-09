@@ -31,6 +31,7 @@ RUN mkdir -p /data && chown node:node /data
 
 ENV OPENCLAW_STATE_DIR=/data/.openclaw
 ENV OPENCLAW_WORKSPACE_DIR=/data/workspace
+ENV HOME=/data
 # Tell the CLI which port the gateway listens on (must match PORT / gateway.port).
 # Without this the CLI defaults to 18789 and `devices list` etc. fail.
 ENV OPENCLAW_GATEWAY_PORT=8080
