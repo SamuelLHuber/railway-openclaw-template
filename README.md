@@ -81,7 +81,6 @@ Optional but recommended:
 
 | Variable | Value | Notes |
 |---|---|---|
-| `SETUP_PASSWORD` | A strong password | Protects the `/setup` web wizard. |
 | `OPENCLAW_STATE_DIR` | `/data/.openclaw` | If using a volume for persistence. |
 | `OPENCLAW_WORKSPACE_DIR` | `/data/workspace` | If using a volume for persistence. |
 
@@ -128,17 +127,6 @@ This is a security measure. To approve the device:
    node openclaw.mjs devices list
    node openclaw.mjs devices approve <requestId>
    ```
-3. Alternatively, if you set `SETUP_PASSWORD`, visit `https://<your-domain>/setup` to use the web wizard which can approve pairings
-
-### Web setup wizard (`/setup`)
-
-If you set the `SETUP_PASSWORD` env var, visiting `https://<your-domain>/setup` opens an interactive wizard where you can:
-
-- Choose a model provider and paste your API key
-- Add channel tokens (Telegram, Discord, Slack, etc.)
-- Configure basic settings
-
-This is the easiest path if you don't want to edit JSON config directly.
 
 ---
 
@@ -181,7 +169,7 @@ Channels let OpenClaw send and receive messages on Telegram, Discord, Slack, Wha
 
 1. Message [@BotFather](https://t.me/BotFather) on Telegram → `/newbot`
 2. Copy the bot token (e.g. `123456789:AA...`)
-3. Add `TELEGRAM_BOT_TOKEN` as a Railway env var, **or** paste it into the `/setup` wizard / Control UI config
+3. Add `TELEGRAM_BOT_TOKEN` as a Railway env var, **or** configure it in the Control UI
 
 Docs: [docs.openclaw.ai/channels/telegram](https://docs.openclaw.ai/channels/telegram)
 
@@ -242,7 +230,11 @@ This preserves:
 
 ### Backups
 
-If you configured the setup wizard, you can export a backup at `https://<your-domain>/setup/export` — this bundles your config + workspace for migration.
+Back up your persistent volume regularly. The key paths are:
+
+- `/data/.openclaw/openclaw.json` — configuration
+- `/data/.openclaw/agents/` — sessions and agent state
+- `/data/.openclaw/credentials/` — channel credentials
 
 ---
 
@@ -292,7 +284,6 @@ This always pulls the newest image but you lose reproducibility and rollback abi
 |---|---|---|
 | `OPENCLAW_GATEWAY_TOKEN` | ✅ | Auth token for the gateway. Generate: `openssl rand -hex 32` |
 | `PORT` | Recommended | Port for the gateway (default: `8080`) |
-| `SETUP_PASSWORD` | Recommended | Protects the `/setup` web wizard |
 | `OPENCLAW_STATE_DIR` | If using volume | State directory (default: `~/.openclaw`) |
 | `OPENCLAW_WORKSPACE_DIR` | If using volume | Workspace directory |
 
