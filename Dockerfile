@@ -5,25 +5,18 @@
 ARG OPENCLAW_VERSION=2026.3.1
 FROM ghcr.io/openclaw/openclaw:${OPENCLAW_VERSION}
 
-# Bake a minimal Railway-compatible config.
-# - gateway.port: must match the port in CMD so the CLI (e.g. `devices list`)
-#   connects to the right port inside the container.
-# - dangerouslyAllowHostHeaderOriginFallback: required because Railway's domain
-#   is dynamic and the gateway binds to 0.0.0.0 (non-loopback).
-# - Users can override this by mounting their own config or setting
-#   OPENCLAW_CONFIG_PATH to a different file.
+# Store the seed config inside the image. At runtime, CMD copies it to the
+# persistent volume (if no config exists yet) so the Control UI can edit it.
 USER root
-RUN mkdir -p /app/config && \
+RUN mkdir -p /app/seed && \
     echo '{ gateway: { port: 8080, controlUi: { dangerouslyAllowHostHeaderOriginFallback: true } } }' \
-    > /app/config/openclaw.json && \
-    chown -R node:node /app/config
+    > /app/seed/openclaw.json
 
 # Pre-create the /data mount point so the volume has correct ownership.
 # Railway mounts the volume at /data; OPENCLAW_STATE_DIR and OPENCLAW_WORKSPACE_DIR
 # point inside it.
 RUN mkdir -p /data && chown node:node /data
 
-ENV OPENCLAW_CONFIG_PATH=/app/config/openclaw.json
 ENV OPENCLAW_STATE_DIR=/data/.openclaw
 ENV OPENCLAW_WORKSPACE_DIR=/data/workspace
 # Tell the CLI which port the gateway listens on (must match PORT / gateway.port).
@@ -35,8 +28,19 @@ ENV OPENCLAW_GATEWAY_PORT=8080
 # --allow-unconfigured lets the gateway start without a pre-existing config;
 # users configure API keys via Railway env vars.
 #
-# Starts as root to fix /data ownership (Railway volumes mount as root),
-# then drops to `node` via gosu/su-exec. We use `su` which is available
-# in the base image and --preserve-environment to keep Railway env vars.
+# Startup sequence:
+# 1. Fix /data ownership (Railway volumes mount as root)
+# 2. Seed config into the volume if none exists yet
+# 3. Drop to `node` user and start the gateway
 USER root
-CMD ["sh", "-c", "chown node:node /data && mkdir -p /data/.openclaw /data/workspace && chown -R node:node /data/.openclaw /data/workspace && exec su --preserve-environment -s /bin/sh node -c 'exec node openclaw.mjs gateway --allow-unconfigured --bind lan --port ${PORT:-8080}'"]
+CMD ["sh", "-c", "\
+  chown node:node /data && \
+  mkdir -p /data/.openclaw /data/workspace && \
+  chown -R node:node /data/.openclaw /data/workspace && \
+  if [ ! -f /data/.openclaw/openclaw.json ]; then \
+    cp /app/seed/openclaw.json /data/.openclaw/openclaw.json && \
+    chown node:node /data/.openclaw/openclaw.json; \
+  fi && \
+  export HOME=/home/node && \
+  exec su --preserve-environment -s /bin/sh node -c \
+    'exec node openclaw.mjs gateway --allow-unconfigured --bind lan --port ${PORT:-8080}'"]
