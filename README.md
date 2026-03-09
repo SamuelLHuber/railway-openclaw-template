@@ -203,11 +203,18 @@ Docs: [docs.openclaw.ai/channels/slack](https://docs.openclaw.ai/channels/slack)
 
 ### WhatsApp
 
-WhatsApp requires a QR code login flow, which needs CLI access:
+WhatsApp requires a QR code login via CLI — the Control UI's "Link" button won't work because the web login provider is not available in headless environments.
 
-1. Open a Railway shell for your service
+1. Run `railway ssh` to connect to your container
 2. Run `node openclaw.mjs channels login`
-3. Scan the QR code with your phone
+3. Scan the QR code with your phone's WhatsApp (Linked Devices → Link a Device)
+
+```bash
+railway ssh
+node openclaw.mjs channels login
+```
+
+> **Note:** WhatsApp credentials are stored on the persistent volume at `/data/.openclaw/credentials/whatsapp/`. They survive redeploys but you'll need to re-link if you delete the volume.
 
 Docs: [docs.openclaw.ai/channels/whatsapp](https://docs.openclaw.ai/channels/whatsapp)
 
