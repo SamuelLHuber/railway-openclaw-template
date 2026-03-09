@@ -123,7 +123,34 @@ From the Control UI you can:
 - Chat directly with your AI (WebChat)
 - Configure models, channels, tools, and agents
 - View sessions and conversation history
-- Edit the JSON5 config live (hot-reloads without restart)
+
+### Editing the config
+
+There are two ways to change the OpenClaw configuration:
+
+**Option A: Control UI (Config tab)** — open the Config tab in the Control UI to view and edit `openclaw.json` directly in the browser. Changes are validated and saved to the persistent volume.
+
+**Option B: CLI via `railway ssh`** — use `config set` to change individual values:
+
+```bash
+railway ssh
+node openclaw.mjs config set <path> <value>
+```
+
+Examples:
+
+```bash
+# Set the primary model
+node openclaw.mjs config set agents.defaults.model.primary "anthropic/claude-sonnet-4-5"
+
+# Enable a channel
+node openclaw.mjs config set channels.whatsapp.dmPolicy pairing
+
+# View a config value
+node openclaw.mjs config get agents.defaults.model
+```
+
+> **Note:** Some config changes (especially adding new channels) require a gateway restart to take effect. Redeploy from the Railway dashboard or run `railway up`. Model and agent config changes typically hot-reload without a restart.
 
 ### Device pairing
 
