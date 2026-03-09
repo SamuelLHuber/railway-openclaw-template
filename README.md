@@ -54,7 +54,7 @@ The Dockerfile does two things:
 
 1. Fork this repo → connect it to a new Railway service
 2. Add a **volume** mounted at `/data` (Railway → service → Settings → Volumes)
-3. Set environment variables: `OPENCLAW_GATEWAY_TOKEN` + at least one API key
+3. Set `OPENCLAW_GATEWAY_TOKEN` env var + configure at least one model provider (API key or [Codex OAuth](#option-2-openai-codex-subscription-oauth))
 4. Add a public domain in Railway settings
 5. Open `https://<your-domain>/overview` → enter your gateway token → click **Connect** → approve device pairing with `railway ssh`
 
@@ -215,19 +215,26 @@ Then set the model in config:
 
 ### Model configuration
 
-You can configure models via the Control UI (Config tab), CLI, or `openclaw.json`:
+You can configure models via the Control UI (Config tab), CLI, or `openclaw.json`. Set the model to match the provider you've configured:
 
 ```json5
+// Codex subscription example
 {
-  agents: {
-    defaults: {
-      model: {
-        primary: "openai-codex/gpt-5.4",
-        fallbacks: ["anthropic/claude-sonnet-4-5"],
-      },
-    },
-  },
+  agents: { defaults: { model: { primary: "openai-codex/gpt-5.4" } } },
 }
+
+// API key example (set OPENAI_API_KEY env var)
+{
+  agents: { defaults: { model: { primary: "openai/gpt-5.2" } } },
+}
+
+// Anthropic example (set ANTHROPIC_API_KEY env var)
+{
+  agents: { defaults: { model: { primary: "anthropic/claude-sonnet-4-5" } } },
+}
+```
+
+> **Important:** Only set models for providers you've actually configured (API key or OAuth). If you set a fallback model without the matching provider credentials, the gateway will error when the primary is unavailable.
 ```
 
 ---
