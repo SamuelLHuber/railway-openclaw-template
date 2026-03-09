@@ -5,11 +5,23 @@
 ARG OPENCLAW_VERSION=2026.3.1
 FROM ghcr.io/openclaw/openclaw:${OPENCLAW_VERSION}
 
+# Install Homebrew (Linuxbrew) — useful for installing additional tools via
+# `brew install` when SSH'd into the container (e.g. jq, ripgrep, fzf).
+# We install as the `node` user and symlink to /usr/local/bin so brew is on PATH
+# for both root and node.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends build-essential procps file && \
+    rm -rf /var/lib/apt/lists/* && \
+    su - node -c 'NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"' && \
+    ln -sf /home/node/.linuxbrew/bin/brew /usr/local/bin/brew
+ENV HOMEBREW_NO_AUTO_UPDATE=1
+
 # Store the seed config inside the image. At runtime, CMD copies it to the
 # persistent volume (if no config exists yet) so the Control UI can edit it.
+# Default model: openai/gpt-5.4
 USER root
 RUN mkdir -p /app/seed && \
-    echo '{ gateway: { port: 8080, controlUi: { dangerouslyAllowHostHeaderOriginFallback: true } } }' \
+    echo '{ agents: { defaults: { model: { primary: "openai/gpt-5.4" } } }, gateway: { port: 8080, controlUi: { dangerouslyAllowHostHeaderOriginFallback: true } } }' \
     > /app/seed/openclaw.json
 
 # Pre-create the /data mount point so the volume has correct ownership.
@@ -42,5 +54,6 @@ CMD ["sh", "-c", "\
     chown node:node /data/.openclaw/openclaw.json; \
   fi && \
   export HOME=/home/node && \
+  export PATH=/home/node/.linuxbrew/bin:/home/node/.linuxbrew/sbin:$PATH && \
   exec su --preserve-environment -s /bin/sh node -c \
     'exec node openclaw.mjs gateway --allow-unconfigured --bind lan --port ${PORT:-8080}'"]

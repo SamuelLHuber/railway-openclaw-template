@@ -31,11 +31,13 @@ This repo is a **thin wrapper** around the official OpenClaw Docker image. There
 ```
 ┌──────────────────────────────────┐
 │  This repo                       │
-│  ├─ Dockerfile (5 lines)         │  FROM ghcr.io/openclaw/openclaw
+│  ├─ Dockerfile                   │  FROM ghcr.io/openclaw/openclaw
+│  │   ├─ Homebrew (Linuxbrew)     │  brew install tools via SSH
+│  │   └─ Seed config              │  openai/gpt-5.4 default model
 │  ├─ railway.toml                 │  health check + restart policy
 │  └─ env vars (Railway dashboard) │  API keys, tokens
 └───────────┬──────────────────────┘
-            │ docker pull (~30s)
+            │ docker build + pull (~60s)
             ▼
 ┌──────────────────────────────────┐
 │  ghcr.io/openclaw/openclaw       │  Official multi-arch image
@@ -43,10 +45,11 @@ This repo is a **thin wrapper** around the official OpenClaw Docker image. There
 └──────────────────────────────────┘
 ```
 
-The Dockerfile does two things:
+The Dockerfile does three things:
 
 1. `FROM ghcr.io/openclaw/openclaw:<version>` — pulls the official image
-2. Overrides `CMD` to bind to `0.0.0.0` (required for Railway networking) and use Railway's injected `$PORT`
+2. Installs [Homebrew](https://brew.sh/) (Linuxbrew) so you can `brew install` tools via `railway ssh`
+3. Overrides `CMD` to bind to `0.0.0.0` (required for Railway networking) and use Railway's injected `$PORT`
 
 ---
 
@@ -459,6 +462,17 @@ This is normal on first connection. See [device pairing](#device-pairing).
 - Verify the channel token env var is set (check for typos)
 - Check Railway logs for channel-specific errors
 - For WhatsApp: you must complete QR login via CLI shell
+
+### Installing extra tools with Homebrew
+
+The container ships with [Homebrew](https://brew.sh/) (Linuxbrew) pre-installed. When SSH'd into the container you can install additional CLI tools:
+
+```bash
+railway ssh
+brew install jq ripgrep fzf
+```
+
+> **Note:** Packages installed via `brew` live in the container filesystem and are **lost on redeploy**. For tools you always need, add `RUN brew install <package>` to the Dockerfile.
 
 ### Need more help
 
