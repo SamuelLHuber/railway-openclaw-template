@@ -5,6 +5,9 @@
 ARG OPENCLAW_VERSION=2026.3.1
 FROM ghcr.io/openclaw/openclaw:${OPENCLAW_VERSION}
 
+# Base image runs as `node` — switch to root for all build steps.
+USER root
+
 # Install Homebrew (Linuxbrew) — useful for installing additional tools via
 # `brew install` when SSH'd into the container (e.g. jq, ripgrep, fzf).
 # We install as the `node` user and symlink to /usr/local/bin so brew is on PATH
@@ -19,7 +22,6 @@ ENV HOMEBREW_NO_AUTO_UPDATE=1
 # Store the seed config inside the image. At runtime, CMD copies it to the
 # persistent volume (if no config exists yet) so the Control UI can edit it.
 # Default model: openai/gpt-5.4
-USER root
 RUN mkdir -p /app/seed && \
     echo '{ agents: { defaults: { model: { primary: "openai/gpt-5.4" } } }, gateway: { port: 8080, controlUi: { dangerouslyAllowHostHeaderOriginFallback: true } } }' \
     > /app/seed/openclaw.json
@@ -45,7 +47,6 @@ ENV OPENCLAW_GATEWAY_PORT=8080
 # 1. Ensure /data subdirs exist
 # 2. Seed config into the volume if none exists yet
 # 3. Start the gateway (runs as root — isolated Railway container)
-USER root
 CMD ["sh", "-c", "\
   export HOME=/data && \
   mkdir -p /data/.openclaw /data/workspace && \
