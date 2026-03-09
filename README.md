@@ -53,9 +53,10 @@ The Dockerfile does two things:
 ## Quick start
 
 1. Fork this repo → connect it to a new Railway service
-2. Set environment variables: `OPENCLAW_GATEWAY_TOKEN` + at least one API key
-3. Add a public domain in Railway settings
-4. Open `https://<your-domain>/` — the Control UI loads
+2. Add a **volume** mounted at `/data` (Railway → service → Settings → Volumes)
+3. Set environment variables: `OPENCLAW_GATEWAY_TOKEN` + at least one API key
+4. Add a public domain in Railway settings
+5. Open `https://<your-domain>/` — the Control UI loads
 
 ---
 
@@ -77,25 +78,29 @@ In your Railway service, go to **Variables** and add:
 | `PORT` | Recommended | Port the gateway listens on. Default: `8080`. Railway auto-detects this. |
 | At least one provider key | See [providers](#adding-model-providers) | Without a provider key the gateway starts but can't answer messages. |
 
-Optional but recommended:
+> **Note:** `OPENCLAW_STATE_DIR` and `OPENCLAW_WORKSPACE_DIR` are baked into the Dockerfile pointing at `/data/.openclaw` and `/data/workspace`. You don't need to set them manually — just add a volume at `/data`.
 
-| Variable | Value | Notes |
-|---|---|---|
-| `OPENCLAW_STATE_DIR` | `/data/.openclaw` | If using a volume for persistence. |
-| `OPENCLAW_WORKSPACE_DIR` | `/data/workspace` | If using a volume for persistence. |
+### 3. Add a volume
 
-### 3. Configure networking
+In **Settings → Volumes**:
+
+- Click **Add Volume**
+- Set the mount path to `/data`
+
+This is **required** — without it, all config, sessions, and credentials are lost on every redeploy. The `railway.toml` enforces this via `requiredMountPath`.
+
+### 4. Configure networking
 
 In **Settings → Networking**:
 
 - **Generate a domain** (e.g. `myclaw.up.railway.app`) or attach a custom domain
 - Railway automatically handles HTTPS termination
 
-### 4. Deploy
+### 5. Deploy
 
 Push to your repo (or click **Deploy** in Railway). The first deploy pulls the Docker image and starts the gateway. Subsequent deploys are near-instant.
 
-### 5. Open the Control UI
+### 6. Open the Control UI
 
 Visit `https://<your-railway-domain>/` in your browser.
 
@@ -210,16 +215,13 @@ Signal, iMessage, Matrix, Mattermost, MS Teams, Google Chat, IRC, Line, Nostr, T
 
 ## Persistent storage
 
-By default the gateway is **stateless** — config and conversation data are lost on redeploy. To persist data:
+The Dockerfile bakes in `OPENCLAW_STATE_DIR=/data/.openclaw` and `OPENCLAW_WORKSPACE_DIR=/data/workspace`. The `railway.toml` sets `requiredMountPath = "/data"` so Railway prompts you to add a volume.
 
-1. In Railway, add a **Volume** to your service
-2. Set the mount path to `/data`
-3. Set these environment variables:
+If you haven't added a volume yet:
 
-| Variable | Value |
-|---|---|
-| `OPENCLAW_STATE_DIR` | `/data/.openclaw` |
-| `OPENCLAW_WORKSPACE_DIR` | `/data/workspace` |
+1. In Railway, go to your service → **Settings → Volumes**
+2. Click **Add Volume**
+3. Set the mount path to `/data`
 
 This preserves:
 
@@ -284,8 +286,8 @@ This always pulls the newest image but you lose reproducibility and rollback abi
 |---|---|---|
 | `OPENCLAW_GATEWAY_TOKEN` | ✅ | Auth token for the gateway. Generate: `openssl rand -hex 32` |
 | `PORT` | Recommended | Port for the gateway (default: `8080`) |
-| `OPENCLAW_STATE_DIR` | If using volume | State directory (default: `~/.openclaw`) |
-| `OPENCLAW_WORKSPACE_DIR` | If using volume | Workspace directory |
+| `OPENCLAW_STATE_DIR` | Baked in | State directory (default: `/data/.openclaw`) |
+| `OPENCLAW_WORKSPACE_DIR` | Baked in | Workspace directory (default: `/data/workspace`) |
 
 ### Model providers
 

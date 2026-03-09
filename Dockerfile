@@ -15,9 +15,16 @@ RUN mkdir -p /app/config && \
     echo '{ gateway: { controlUi: { dangerouslyAllowHostHeaderOriginFallback: true } } }' \
     > /app/config/openclaw.json && \
     chown -R node:node /app/config
+
+# Pre-create the /data mount point so the volume has correct ownership.
+# Railway mounts the volume at /data; OPENCLAW_STATE_DIR and OPENCLAW_WORKSPACE_DIR
+# point inside it.
+RUN mkdir -p /data && chown node:node /data
 USER node
 
 ENV OPENCLAW_CONFIG_PATH=/app/config/openclaw.json
+ENV OPENCLAW_STATE_DIR=/data/.openclaw
+ENV OPENCLAW_WORKSPACE_DIR=/data/workspace
 
 # Railway injects PORT as an env var; OpenClaw needs --port at runtime.
 # We override the default CMD to use Railway's PORT and bind to 0.0.0.0 (lan).

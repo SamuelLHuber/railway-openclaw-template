@@ -9,3 +9,5 @@ healthcheckTimeout = 300
 # Let Dockerfile CMD handle the start
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 5
+# Require a volume mount at /data for persistent state
+requiredMountPath = "/data"
