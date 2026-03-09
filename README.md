@@ -225,7 +225,9 @@ Minimal config block (add via Control UI → Config tab):
 }
 ```
 
-**Step 2: Link WhatsApp** via `railway ssh`:
+**Step 2: Restart the gateway** so it picks up the new channel config. Redeploy from the Railway dashboard or run `railway up`.
+
+**Step 3: Link WhatsApp** via `railway ssh`:
 
 ```bash
 railway ssh
