@@ -2,9 +2,7 @@
 
 Deploy [OpenClaw](https://github.com/openclaw/openclaw) to [Railway](https://railway.com) in one click — fast, using the official pre-built Docker image.
 
-[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/new/template?template=https://github.com/YOUR_USER/openclaw-railway)
-
-> **Replace `YOUR_USER`** in the button URL above after pushing this repo to GitHub.
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/new/template?template=https://github.com/SamuelLHuber/railway-openclaw-template)
 
 ---
 
