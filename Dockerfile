@@ -22,7 +22,6 @@ RUN mkdir -p /app/config && \
 # Railway mounts the volume at /data; OPENCLAW_STATE_DIR and OPENCLAW_WORKSPACE_DIR
 # point inside it.
 RUN mkdir -p /data && chown node:node /data
-USER node
 
 ENV OPENCLAW_CONFIG_PATH=/app/config/openclaw.json
 ENV OPENCLAW_STATE_DIR=/data/.openclaw
@@ -35,4 +34,9 @@ ENV OPENCLAW_GATEWAY_PORT=8080
 # We override the default CMD to use Railway's PORT and bind to 0.0.0.0 (lan).
 # --allow-unconfigured lets the gateway start without a pre-existing config;
 # users configure API keys via Railway env vars.
-CMD ["sh", "-c", "exec node openclaw.mjs gateway --allow-unconfigured --bind lan --port ${PORT:-8080}"]
+#
+# Starts as root to fix /data ownership (Railway volumes mount as root),
+# then drops to `node` via gosu/su-exec. We use `su` which is available
+# in the base image and --preserve-environment to keep Railway env vars.
+USER root
+CMD ["sh", "-c", "chown node:node /data && mkdir -p /data/.openclaw /data/workspace && chown -R node:node /data/.openclaw /data/workspace && exec su --preserve-environment -s /bin/sh node -c 'exec node openclaw.mjs gateway --allow-unconfigured --bind lan --port ${PORT:-8080}'"]
