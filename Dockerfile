@@ -41,19 +41,13 @@ ENV OPENCLAW_GATEWAY_PORT=8080
 # users configure API keys via Railway env vars.
 #
 # Startup sequence:
-# 1. Fix /data ownership (Railway volumes mount as root)
+# 1. Ensure /data subdirs exist
 # 2. Seed config into the volume if none exists yet
-# 3. Drop to `node` user and start the gateway
+# 3. Start the gateway (runs as root — isolated Railway container)
 USER root
 CMD ["sh", "-c", "\
-  chown node:node /data && \
   mkdir -p /data/.openclaw /data/workspace && \
-  chown -R node:node /data/.openclaw /data/workspace && \
   if [ ! -f /data/.openclaw/openclaw.json ]; then \
-    cp /app/seed/openclaw.json /data/.openclaw/openclaw.json && \
-    chown node:node /data/.openclaw/openclaw.json; \
+    cp /app/seed/openclaw.json /data/.openclaw/openclaw.json; \
   fi && \
-  export HOME=/home/node && \
-  export PATH=/home/node/.linuxbrew/bin:/home/node/.linuxbrew/sbin:$PATH && \
-  exec su --preserve-environment -s /bin/sh node -c \
-    'export HOME=/home/node && exec node openclaw.mjs gateway --allow-unconfigured --bind lan --port ${PORT:-8080}'"]
+  exec node openclaw.mjs gateway --allow-unconfigured --bind lan --port ${PORT:-8080}"]
