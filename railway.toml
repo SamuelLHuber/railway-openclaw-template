@@ -1,0 +1,12 @@
+[build]
+# Use our thin Dockerfile wrapper (FROM ghcr.io/openclaw/openclaw)
+dockerfilePath = "Dockerfile"
+
+[deploy]
+# Railway health checks
+healthcheckPath = "/healthz"
+healthcheckTimeout = 10
+startCommand = ""
+# Let Dockerfile CMD handle the start
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5

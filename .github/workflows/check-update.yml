@@ -1,0 +1,77 @@
+name: Check for OpenClaw Updates
+
+on:
+  schedule:
+    # Check daily at 06:00 UTC
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+jobs:
+  check-update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get latest OpenClaw release tag
+        id: latest
+        run: |
+          # Query GHCR for the latest non-beta, non-arch-specific tag
+          TOKEN=$(curl -s "https://ghcr.io/token?scope=repository:openclaw/openclaw:pull" | jq -r '.token')
+          TAGS=$(curl -s -H "Authorization: Bearer $TOKEN" \
+            "https://ghcr.io/v2/openclaw/openclaw/tags/list" | jq -r '.tags[]')
+
+          # Filter: exclude arch-specific, beta, main, latest
+          LATEST=$(echo "$TAGS" \
+            | grep -E '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9]+)?$' \
+            | sort -V \
+            | tail -1)
+
+          echo "tag=$LATEST" >> "$GITHUB_OUTPUT"
+          echo "Latest OpenClaw release: $LATEST"
+
+      - name: Get current pinned version
+        id: current
+        run: |
+          # Read the version from Dockerfile ARG
+          CURRENT=$(grep -oP 'OPENCLAW_VERSION=\K[^ ]+' Dockerfile | head -1)
+          echo "tag=$CURRENT" >> "$GITHUB_OUTPUT"
+          echo "Current pinned version: $CURRENT"
+
+      - name: Compare and update
+        if: steps.latest.outputs.tag != steps.current.outputs.tag && steps.latest.outputs.tag != 'latest' && steps.latest.outputs.tag != ''
+        env:
+          LATEST: ${{ steps.latest.outputs.tag }}
+          CURRENT: ${{ steps.current.outputs.tag }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Update available: $CURRENT → $LATEST"
+
+          # Update Dockerfile
+          sed -i "s/OPENCLAW_VERSION=.*/OPENCLAW_VERSION=$LATEST/" Dockerfile
+
+          # Update README badge/version references
+          sed -i "s|openclaw/openclaw:[0-9]\{4\}\.[0-9]*\.[0-9]*[^ ]*|openclaw/openclaw:$LATEST|g" README.md
+
+          # Create PR
+          BRANCH="auto-update/openclaw-$LATEST"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add -A
+          git commit -m "chore: update OpenClaw to $LATEST"
+          git push origin "$BRANCH"
+
+          gh pr create \
+            --title "chore: update OpenClaw to $LATEST" \
+            --body "Automated update from \`$CURRENT\` → \`$LATEST\`
+
+          Release: https://github.com/openclaw/openclaw/releases/tag/v$LATEST
+          Image: \`ghcr.io/openclaw/openclaw:$LATEST\`
+
+          Merge to redeploy on Railway." \
+            --head "$BRANCH" \
+            --base main

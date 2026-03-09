@@ -1,0 +1,413 @@
+# OpenClaw on Railway
+
+Deploy [OpenClaw](https://github.com/openclaw/openclaw) to [Railway](https://railway.com) in one click — fast, using the official pre-built Docker image.
+
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/new/template?template=https://github.com/YOUR_USER/openclaw-railway)
+
+> **Replace `YOUR_USER`** in the button URL above after pushing this repo to GitHub.
+
+---
+
+## Table of contents
+
+- [How it works](#how-it-works)
+- [Quick start](#quick-start)
+- [Step-by-step setup](#step-by-step-setup)
+- [Post-deploy: configure via Control UI](#post-deploy-configure-via-control-ui)
+- [Adding model providers](#adding-model-providers)
+- [Adding channels](#adding-channels)
+- [Persistent storage](#persistent-storage)
+- [Upgrading OpenClaw](#upgrading-openclaw)
+- [Environment variable reference](#environment-variable-reference)
+- [Health checks](#health-checks)
+- [Troubleshooting](#troubleshooting)
+- [vs codetitlan/openclaw-railway-template](#vs-codetitlanopenclaw-railway-template)
+- [Upstream documentation](#upstream-documentation)
+
+---
+
+## How it works
+
+This repo is a **thin wrapper** around the official OpenClaw Docker image. There is no source build — Railway pulls the pre-built image, so deploys take **seconds, not minutes**.
+
+```
+┌──────────────────────────────────┐
+│  This repo                       │
+│  ├─ Dockerfile (5 lines)         │  FROM ghcr.io/openclaw/openclaw
+│  ├─ railway.toml                 │  health check + restart policy
+│  └─ env vars (Railway dashboard) │  API keys, tokens
+└───────────┬──────────────────────┘
+            │ docker pull (~30s)
+            ▼
+┌──────────────────────────────────┐
+│  ghcr.io/openclaw/openclaw       │  Official multi-arch image
+│  Published on every release      │  by upstream CI
+└──────────────────────────────────┘
+```
+
+The Dockerfile does two things:
+
+1. `FROM ghcr.io/openclaw/openclaw:<version>` — pulls the official image
+2. Overrides `CMD` to bind to `0.0.0.0` (required for Railway networking) and use Railway's injected `$PORT`
+
+---
+
+## Quick start
+
+1. Fork this repo → connect it to a new Railway service
+2. Set environment variables: `OPENCLAW_GATEWAY_TOKEN` + at least one API key
+3. Add a public domain in Railway settings
+4. Open `https://<your-domain>/` — the Control UI loads
+
+---
+
+## Step-by-step setup
+
+### 1. Create a Railway project
+
+1. Go to [railway.com](https://railway.com) and create a new project
+2. Choose **Deploy from GitHub repo** and select your fork of this repo
+3. Railway detects the `Dockerfile` and starts building
+
+### 2. Set environment variables
+
+In your Railway service, go to **Variables** and add:
+
+| Variable | Value | Notes |
+|---|---|---|
+| `OPENCLAW_GATEWAY_TOKEN` | `openssl rand -hex 32` | **Required.** Secures the gateway API. Generate a random token locally. |
+| At least one provider key | See [providers](#adding-model-providers) | Without a provider key the gateway starts but can't answer messages. |
+
+Optional but recommended:
+
+| Variable | Value | Notes |
+|---|---|---|
+| `SETUP_PASSWORD` | A strong password | Protects the `/setup` web wizard. |
+| `OPENCLAW_STATE_DIR` | `/data/.openclaw` | If using a volume for persistence. |
+| `OPENCLAW_WORKSPACE_DIR` | `/data/workspace` | If using a volume for persistence. |
+
+### 3. Configure networking
+
+In **Settings → Networking**:
+
+- **Generate a domain** (e.g. `myclaw.up.railway.app`) or attach a custom domain
+- Railway automatically handles HTTPS termination
+
+### 4. Deploy
+
+Push to your repo (or click **Deploy** in Railway). The first deploy pulls the Docker image and starts the gateway. Subsequent deploys are near-instant.
+
+### 5. Open the Control UI
+
+Visit `https://<your-railway-domain>/` in your browser.
+
+- Enter your `OPENCLAW_GATEWAY_TOKEN` when prompted
+- On first connect from a new browser, you'll need to **approve the device pairing** — see [device pairing](#device-pairing) below
+
+---
+
+## Post-deploy: configure via Control UI
+
+Once the gateway is running, open `https://<your-domain>/` to access the **Control UI** — a browser-based dashboard for managing OpenClaw.
+
+From the Control UI you can:
+
+- Chat directly with your AI (WebChat)
+- Configure models, channels, tools, and agents
+- View sessions and conversation history
+- Edit the JSON5 config live (hot-reloads without restart)
+
+### Device pairing
+
+When you connect from a new browser, you'll see: `disconnected (1008): pairing required`.
+
+This is a security measure. To approve the device:
+
+1. The Control UI shows a pairing code
+2. If you have CLI access (e.g. via Railway's shell), run:
+   ```bash
+   node openclaw.mjs devices list
+   node openclaw.mjs devices approve <requestId>
+   ```
+3. Alternatively, if you set `SETUP_PASSWORD`, visit `https://<your-domain>/setup` to use the web wizard which can approve pairings
+
+### Web setup wizard (`/setup`)
+
+If you set the `SETUP_PASSWORD` env var, visiting `https://<your-domain>/setup` opens an interactive wizard where you can:
+
+- Choose a model provider and paste your API key
+- Add channel tokens (Telegram, Discord, Slack, etc.)
+- Configure basic settings
+
+This is the easiest path if you don't want to edit JSON config directly.
+
+---
+
+## Adding model providers
+
+Set one or more provider API keys as Railway environment variables. OpenClaw auto-detects available providers.
+
+| Provider | Env variable | Get a key |
+|---|---|---|
+| Anthropic | `ANTHROPIC_API_KEY` | [console.anthropic.com](https://console.anthropic.com/) |
+| OpenAI | `OPENAI_API_KEY` | [platform.openai.com](https://platform.openai.com/) |
+| Google Gemini | `GEMINI_API_KEY` | [aistudio.google.com](https://aistudio.google.com/) |
+| OpenRouter | `OPENROUTER_API_KEY` | [openrouter.ai](https://openrouter.ai/) |
+| Mistral | `MISTRAL_API_KEY` | [console.mistral.ai](https://console.mistral.ai/) |
+
+Additional providers (Bedrock, Ollama, vLLM, Together, etc.) are supported — see the [upstream providers docs](https://docs.openclaw.ai/providers).
+
+You can also configure models via the Control UI or `openclaw.json`:
+
+```json5
+{
+  agents: {
+    defaults: {
+      model: {
+        primary: "anthropic/claude-sonnet-4-5",
+        fallbacks: ["openai/gpt-5.2"],
+      },
+    },
+  },
+}
+```
+
+---
+
+## Adding channels
+
+Channels let OpenClaw send and receive messages on Telegram, Discord, Slack, WhatsApp, and [many more](https://docs.openclaw.ai/channels).
+
+### Telegram
+
+1. Message [@BotFather](https://t.me/BotFather) on Telegram → `/newbot`
+2. Copy the bot token (e.g. `123456789:AA...`)
+3. Add `TELEGRAM_BOT_TOKEN` as a Railway env var, **or** paste it into the `/setup` wizard / Control UI config
+
+Docs: [docs.openclaw.ai/channels/telegram](https://docs.openclaw.ai/channels/telegram)
+
+### Discord
+
+1. Go to [discord.com/developers/applications](https://discord.com/developers/applications) → **New Application**
+2. **Bot** → **Add Bot** → **enable MESSAGE CONTENT INTENT** (under Privileged Gateway Intents)
+3. Copy the bot token
+4. Add `DISCORD_BOT_TOKEN` as a Railway env var
+5. Invite the bot to your server (OAuth2 URL Generator; scopes: `bot`, `applications.commands`)
+
+Docs: [docs.openclaw.ai/channels/discord](https://docs.openclaw.ai/channels/discord)
+
+### Slack
+
+1. Create a Slack app at [api.slack.com/apps](https://api.slack.com/apps)
+2. Enable Socket Mode → copy the **App-Level Token** (`xapp-...`)
+3. Add bot scopes and install to your workspace → copy the **Bot Token** (`xoxb-...`)
+4. Set `SLACK_BOT_TOKEN` and `SLACK_APP_TOKEN` as Railway env vars
+
+Docs: [docs.openclaw.ai/channels/slack](https://docs.openclaw.ai/channels/slack)
+
+### WhatsApp
+
+WhatsApp requires a QR code login flow, which needs CLI access:
+
+1. Open a Railway shell for your service
+2. Run `node openclaw.mjs channels login`
+3. Scan the QR code with your phone
+
+Docs: [docs.openclaw.ai/channels/whatsapp](https://docs.openclaw.ai/channels/whatsapp)
+
+### All channels
+
+Signal, iMessage, Matrix, Mattermost, MS Teams, Google Chat, IRC, Line, Nostr, Twitch, Zalo, and more — see the [full channels list](https://docs.openclaw.ai/channels).
+
+---
+
+## Persistent storage
+
+By default the gateway is **stateless** — config and conversation data are lost on redeploy. To persist data:
+
+1. In Railway, add a **Volume** to your service
+2. Set the mount path to `/data`
+3. Set these environment variables:
+
+| Variable | Value |
+|---|---|
+| `OPENCLAW_STATE_DIR` | `/data/.openclaw` |
+| `OPENCLAW_WORKSPACE_DIR` | `/data/workspace` |
+
+This preserves:
+
+- `openclaw.json` configuration
+- Conversation history and sessions
+- Channel credentials (WhatsApp auth, etc.)
+- Agent workspaces
+
+### Backups
+
+If you configured the setup wizard, you can export a backup at `https://<your-domain>/setup/export` — this bundles your config + workspace for migration.
+
+---
+
+## Upgrading OpenClaw
+
+The `OPENCLAW_VERSION` build arg in the Dockerfile controls which image tag is used:
+
+```dockerfile
+ARG OPENCLAW_VERSION=2026.3.1
+```
+
+### Option A: Automatic (recommended)
+
+The included GitHub Actions workflow (`.github/workflows/check-update.yml`) checks GHCR daily for new releases. When a new version is found, it opens a PR. Merge the PR → Railway redeploys automatically.
+
+> **Note:** Enable GitHub Actions on your fork for this to work.
+
+### Option B: Manual script
+
+```bash
+# Fetch and apply the latest version
+./scripts/upgrade.sh
+
+# Or pin a specific version
+./scripts/upgrade.sh 2026.3.2
+```
+
+Then commit and push — Railway redeploys on push.
+
+### Option C: Track latest (not recommended for production)
+
+Change the Dockerfile:
+
+```dockerfile
+ARG OPENCLAW_VERSION=latest
+```
+
+This always pulls the newest image but you lose reproducibility and rollback ability.
+
+---
+
+## Environment variable reference
+
+### Core
+
+| Variable | Required | Description |
+|---|---|---|
+| `OPENCLAW_GATEWAY_TOKEN` | ✅ | Auth token for the gateway. Generate: `openssl rand -hex 32` |
+| `SETUP_PASSWORD` | Recommended | Protects the `/setup` web wizard |
+| `OPENCLAW_STATE_DIR` | If using volume | State directory (default: `~/.openclaw`) |
+| `OPENCLAW_WORKSPACE_DIR` | If using volume | Workspace directory |
+
+### Model providers
+
+| Variable | Description |
+|---|---|
+| `ANTHROPIC_API_KEY` | Anthropic (Claude) |
+| `OPENAI_API_KEY` | OpenAI (GPT) |
+| `GEMINI_API_KEY` | Google Gemini |
+| `OPENROUTER_API_KEY` | OpenRouter (multi-provider) |
+| `MISTRAL_API_KEY` | Mistral |
+
+### Channels
+
+| Variable | Description |
+|---|---|
+| `TELEGRAM_BOT_TOKEN` | Telegram bot token |
+| `DISCORD_BOT_TOKEN` | Discord bot token |
+| `SLACK_BOT_TOKEN` | Slack bot user token (`xoxb-...`) |
+| `SLACK_APP_TOKEN` | Slack app-level token (`xapp-...`) |
+
+### Tools
+
+| Variable | Description |
+|---|---|
+| `BRAVE_API_KEY` | Brave Search API |
+| `PERPLEXITY_API_KEY` | Perplexity search |
+| `FIRECRAWL_API_KEY` | Firecrawl web scraping |
+
+See [`.env.example`](.env.example) for the complete list.
+
+---
+
+## Health checks
+
+The gateway exposes built-in health endpoints (no auth required):
+
+| Endpoint | Purpose |
+|---|---|
+| `/healthz` | Liveness probe — "is the process running?" |
+| `/readyz` | Readiness probe — "are channels connected?" |
+| `/health` | Alias for `/healthz` |
+| `/ready` | Alias for `/readyz` |
+
+Railway is configured to probe `/healthz` via `railway.toml`.
+
+---
+
+## Troubleshooting
+
+### Gateway starts but no AI responses
+
+- Verify at least one model provider API key is set correctly
+- Check Railway logs for auth errors
+- In the Control UI, go to the Config tab and verify model settings
+
+### "disconnected (1008): pairing required"
+
+This is normal on first connection. See [device pairing](#device-pairing).
+
+### "ECONNREFUSED" or health check failures
+
+- Ensure the Dockerfile CMD binds to `lan` (0.0.0.0), not loopback — this is the default in this template
+- Check that Railway's `PORT` env var is being passed through
+
+### Channel not connecting
+
+- Verify the channel token env var is set (check for typos)
+- Check Railway logs for channel-specific errors
+- For WhatsApp: you must complete QR login via CLI shell
+
+### Need more help
+
+- Run diagnostics from a Railway shell: `node openclaw.mjs doctor`
+- Check health: `node openclaw.mjs health --json`
+- View status: `node openclaw.mjs status --all`
+
+---
+
+## vs codetitlan/openclaw-railway-template
+
+| | This template | codetitlan template |
+|---|---|---|
+| **Deploy time** | ~30 seconds (image pull) | 10-15+ minutes (full source build) |
+| **How it works** | `FROM ghcr.io/openclaw/openclaw` | Clones repo, `pnpm install`, TypeScript build, UI bundle |
+| **Upgrades** | Change version tag, redeploy | Re-clone, rebuild everything |
+| **Auto-updates** | GitHub Actions PR workflow | Manual |
+| **Image size** | Same (official image) | Same (but built on Railway's infra) |
+
+---
+
+## Upstream documentation
+
+| Topic | Link |
+|---|---|
+| **Getting started** | [docs.openclaw.ai/start/getting-started](https://docs.openclaw.ai/start/getting-started) |
+| **Configuration** | [docs.openclaw.ai/gateway/configuration](https://docs.openclaw.ai/gateway/configuration) |
+| **Configuration examples** | [docs.openclaw.ai/gateway/configuration-examples](https://docs.openclaw.ai/gateway/configuration-examples) |
+| **Configuration reference** | [docs.openclaw.ai/gateway/configuration-reference](https://docs.openclaw.ai/gateway/configuration-reference) |
+| **Docker install guide** | [docs.openclaw.ai/install/docker](https://docs.openclaw.ai/install/docker) |
+| **Railway deploy guide** | [docs.openclaw.ai/install/railway](https://docs.openclaw.ai/install/railway) |
+| **Control UI** | [docs.openclaw.ai/web/control-ui](https://docs.openclaw.ai/web/control-ui) |
+| **Channels overview** | [docs.openclaw.ai/channels](https://docs.openclaw.ai/channels) |
+| **Model providers** | [docs.openclaw.ai/providers](https://docs.openclaw.ai/providers) |
+| **Authentication** | [docs.openclaw.ai/gateway/authentication](https://docs.openclaw.ai/gateway/authentication) |
+| **Health checks** | [docs.openclaw.ai/gateway/health](https://docs.openclaw.ai/gateway/health) |
+| **Troubleshooting** | [docs.openclaw.ai/gateway/troubleshooting](https://docs.openclaw.ai/gateway/troubleshooting) |
+| **Sandboxing** | [docs.openclaw.ai/gateway/sandboxing](https://docs.openclaw.ai/gateway/sandboxing) |
+| **Security** | [docs.openclaw.ai/security](https://docs.openclaw.ai/security) |
+| **FAQ** | [docs.openclaw.ai/help/faq](https://docs.openclaw.ai/help/faq) |
+| **Discord community** | [discord.gg/clawd](https://discord.gg/clawd) |
+
+---
+
+## License
+
+This Railway wrapper is MIT-licensed. OpenClaw itself is [MIT-licensed](https://github.com/openclaw/openclaw/blob/main/LICENSE).
