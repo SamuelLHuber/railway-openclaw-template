@@ -141,7 +141,7 @@ Examples:
 
 ```bash
 # Set the primary model
-node openclaw.mjs config set agents.defaults.model.primary "anthropic/claude-sonnet-4-5"
+node openclaw.mjs config set agents.defaults.model.primary "openai-codex/gpt-5.4"
 
 # Enable a channel
 node openclaw.mjs config set channels.whatsapp.dmPolicy pairing
@@ -168,6 +168,10 @@ node openclaw.mjs devices approve <requestId>
 
 ## Adding model providers
 
+There are two ways to authenticate with model providers: **API keys** (usage-based billing) or **subscription OAuth** (e.g. ChatGPT/Codex subscription).
+
+### Option 1: API keys (usage-based billing)
+
 Set one or more provider API keys as Railway environment variables. OpenClaw auto-detects available providers.
 
 | Provider | Env variable | Get a key |
@@ -180,15 +184,46 @@ Set one or more provider API keys as Railway environment variables. OpenClaw aut
 
 Additional providers (Bedrock, Ollama, vLLM, Together, etc.) are supported — see the [upstream providers docs](https://docs.openclaw.ai/providers).
 
-You can also configure models via the Control UI or `openclaw.json`:
+### Option 2: OpenAI Codex subscription (OAuth)
+
+If you have a ChatGPT/Codex subscription, you can use OAuth instead of an API key. Run the login flow via `railway ssh`:
+
+```bash
+railway ssh
+node openclaw.mjs models auth login --provider openai-codex
+```
+
+Or use the onboarding wizard:
+
+```bash
+node openclaw.mjs onboard --auth-choice openai-codex
+```
+
+Then set the model in config:
+
+```json5
+{
+  agents: {
+    defaults: {
+      model: { primary: "openai-codex/gpt-5.4" },
+    },
+  },
+}
+```
+
+> **Note:** Codex cloud requires ChatGPT sign-in, while the Codex CLI supports ChatGPT or API key sign-in. OpenClaw maps `openai-codex/gpt-5.4` for ChatGPT/Codex OAuth usage.
+
+### Model configuration
+
+You can configure models via the Control UI (Config tab), CLI, or `openclaw.json`:
 
 ```json5
 {
   agents: {
     defaults: {
       model: {
-        primary: "anthropic/claude-sonnet-4-5",
-        fallbacks: ["openai/gpt-5.2"],
+        primary: "openai-codex/gpt-5.4",
+        fallbacks: ["anthropic/claude-sonnet-4-5"],
       },
     },
   },
