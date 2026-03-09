@@ -15,8 +15,10 @@ USER root
 RUN apt-get update && \
     apt-get install -y --no-install-recommends build-essential procps file && \
     rm -rf /var/lib/apt/lists/* && \
+    mkdir -p /home/linuxbrew/.linuxbrew && \
+    chown -R node:node /home/linuxbrew && \
     su - node -c 'NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"' && \
-    ln -sf /home/node/.linuxbrew/bin/brew /usr/local/bin/brew
+    ln -sf /home/linuxbrew/.linuxbrew/bin/brew /usr/local/bin/brew
 ENV HOMEBREW_NO_AUTO_UPDATE=1
 
 # Store the seed config inside the image. At runtime, CMD copies it to the
