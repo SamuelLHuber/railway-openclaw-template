@@ -56,7 +56,7 @@ The Dockerfile does two things:
 2. Add a **volume** mounted at `/data` (Railway → service → Settings → Volumes)
 3. Set environment variables: `OPENCLAW_GATEWAY_TOKEN` + at least one API key
 4. Add a public domain in Railway settings
-5. Open `https://<your-domain>/` — the Control UI loads
+5. Open `https://<your-domain>/overview` → enter your gateway token → click **Connect** → approve device pairing with `railway ssh`
 
 ---
 
@@ -102,10 +102,15 @@ Push to your repo (or click **Deploy** in Railway). The first deploy pulls the D
 
 ### 6. Open the Control UI
 
-Visit `https://<your-railway-domain>/` in your browser.
+Visit `https://<your-railway-domain>/overview` in your browser.
 
-- Enter your `OPENCLAW_GATEWAY_TOKEN` when prompted
-- On first connect from a new browser, you'll need to **approve the device pairing** — see [device pairing](#device-pairing) below
+1. Enter your `OPENCLAW_GATEWAY_TOKEN` and click **Connect**
+2. On first connect you'll see `disconnected (1008): pairing required` — this is normal. Approve the device using `railway ssh`:
+   ```bash
+   railway ssh
+   node openclaw.mjs devices list
+   node openclaw.mjs devices approve <requestId>
+   ```
 
 ---
 
@@ -124,14 +129,13 @@ From the Control UI you can:
 
 When you connect from a new browser, you'll see: `disconnected (1008): pairing required`.
 
-This is a security measure. To approve the device:
+This is a security measure. To approve the device, use `railway ssh`:
 
-1. The Control UI shows a pairing code
-2. If you have CLI access (e.g. via Railway's shell), run:
-   ```bash
-   node openclaw.mjs devices list
-   node openclaw.mjs devices approve <requestId>
-   ```
+```bash
+railway ssh
+node openclaw.mjs devices list
+node openclaw.mjs devices approve <requestId>
+```
 
 ---
 

@@ -6,13 +6,15 @@ ARG OPENCLAW_VERSION=2026.3.1
 FROM ghcr.io/openclaw/openclaw:${OPENCLAW_VERSION}
 
 # Bake a minimal Railway-compatible config.
+# - gateway.port: must match the port in CMD so the CLI (e.g. `devices list`)
+#   connects to the right port inside the container.
 # - dangerouslyAllowHostHeaderOriginFallback: required because Railway's domain
 #   is dynamic and the gateway binds to 0.0.0.0 (non-loopback).
 # - Users can override this by mounting their own config or setting
 #   OPENCLAW_CONFIG_PATH to a different file.
 USER root
 RUN mkdir -p /app/config && \
-    echo '{ gateway: { controlUi: { dangerouslyAllowHostHeaderOriginFallback: true } } }' \
+    echo '{ gateway: { port: 8080, controlUi: { dangerouslyAllowHostHeaderOriginFallback: true } } }' \
     > /app/config/openclaw.json && \
     chown -R node:node /app/config
 
@@ -25,6 +27,9 @@ USER node
 ENV OPENCLAW_CONFIG_PATH=/app/config/openclaw.json
 ENV OPENCLAW_STATE_DIR=/data/.openclaw
 ENV OPENCLAW_WORKSPACE_DIR=/data/workspace
+# Tell the CLI which port the gateway listens on (must match PORT / gateway.port).
+# Without this the CLI defaults to 18789 and `devices list` etc. fail.
+ENV OPENCLAW_GATEWAY_PORT=8080
 
 # Railway injects PORT as an env var; OpenClaw needs --port at runtime.
 # We override the default CMD to use Railway's PORT and bind to 0.0.0.0 (lan).
