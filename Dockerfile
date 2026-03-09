@@ -56,4 +56,4 @@ CMD ["sh", "-c", "\
   export HOME=/home/node && \
   export PATH=/home/node/.linuxbrew/bin:/home/node/.linuxbrew/sbin:$PATH && \
   exec su --preserve-environment -s /bin/sh node -c \
-    'exec node openclaw.mjs gateway --allow-unconfigured --bind lan --port ${PORT:-8080}'"]
+    'export HOME=/home/node && exec node openclaw.mjs gateway --allow-unconfigured --bind lan --port ${PORT:-8080}'"]
