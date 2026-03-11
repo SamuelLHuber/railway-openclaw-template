@@ -2,7 +2,7 @@
 # Uses pre-built multi-arch images from GHCR — no build step needed.
 # To pin a version, change the tag (e.g. ghcr.io/openclaw/openclaw:2026.3.1).
 # To track latest stable: ghcr.io/openclaw/openclaw:latest
-ARG OPENCLAW_VERSION=2026.3.8
+ARG OPENCLAW_VERSION=2026.3.1
 FROM ghcr.io/openclaw/openclaw:${OPENCLAW_VERSION}
 
 # Base image runs as `node` — switch to root for all build steps.
