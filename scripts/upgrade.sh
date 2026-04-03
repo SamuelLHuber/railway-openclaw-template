@@ -9,18 +9,12 @@ DOCKERFILE="Dockerfile"
 if [[ -n "${1:-}" ]]; then
   LATEST="$1"
 else
-  echo "Fetching latest OpenClaw version from GHCR..."
-  TOKEN=$(curl -s "https://ghcr.io/token?scope=repository:openclaw/openclaw:pull" | jq -r '.token')
-  TAGS=$(curl -s -H "Authorization: Bearer $TOKEN" \
-    "https://ghcr.io/v2/openclaw/openclaw/tags/list" | jq -r '.tags[]')
-
-  LATEST=$(echo "$TAGS" \
-    | grep -E '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9]+)?$' \
-    | sort -V \
-    | tail -1)
+  echo "Fetching latest OpenClaw version from GitHub releases..."
+  LATEST=$(curl -fsSL https://api.github.com/repos/openclaw/openclaw/releases/latest \
+    | jq -r '.tag_name | ltrimstr("v")')
 fi
 
-CURRENT=$(grep -oP 'OPENCLAW_VERSION=\K[^ ]+' "$DOCKERFILE" | head -1)
+CURRENT=$(sed -n 's/^ARG OPENCLAW_VERSION=//p' "$DOCKERFILE" | head -1)
 
 if [[ "$CURRENT" == "$LATEST" ]]; then
   echo "Already up to date: $CURRENT"

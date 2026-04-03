@@ -57,9 +57,9 @@ The Dockerfile does three things:
 
 1. Fork this repo → connect it to a new Railway service
 2. Add a **volume** mounted at `/data` (Railway → service → Settings → Volumes)
-3. Set `OPENCLAW_GATEWAY_TOKEN` env var + configure at least one model provider (API key or [Codex OAuth](#option-2-openai-codex-subscription-oauth))
+3. Set `OPENCLAW_GATEWAY_PASSWORD` and `OPENCLAW_ALLOWED_ORIGIN` env vars + configure at least one model provider (API key or [Codex OAuth](#option-2-openai-codex-subscription-oauth))
 4. Add a public domain in Railway settings
-5. Open `https://<your-domain>/overview` → enter your gateway token → click **Connect** → approve device pairing with `railway ssh`
+5. Open `https://<your-domain>/overview` → enter your gateway password → click **Connect** → approve device pairing with `railway ssh`
 
 ---
 
@@ -77,11 +77,14 @@ In your Railway service, go to **Variables** and add:
 
 | Variable | Required | Description |
 |---|---|---|
-| `OPENCLAW_GATEWAY_TOKEN` | ✅ | Auth token for the gateway API. Generate: `openssl rand -hex 32` |
+| `OPENCLAW_GATEWAY_PASSWORD` | ✅ | Password for the gateway / Control UI. Generate a long random value, e.g. `openssl rand -base64 32` |
+| `OPENCLAW_ALLOWED_ORIGIN` | ✅ | Exact HTTPS origin allowed to load the Control UI, e.g. `https://myclaw.up.railway.app` |
 | `PORT` | Recommended | Port the gateway listens on. Default: `8080`. Railway auto-detects this. |
 | At least one provider key | See [providers](#adding-model-providers) | Without a provider key the gateway starts but can't answer messages. |
 
 > **Note:** `OPENCLAW_STATE_DIR` and `OPENCLAW_WORKSPACE_DIR` are baked into the Dockerfile pointing at `/data/.openclaw` and `/data/workspace`. You don't need to set them manually — just add a volume at `/data`.
+>
+> **Important:** this template only seeds `/data/.openclaw/openclaw.json` on first boot. If your Railway volume already contains that file, changing env vars alone will not rewrite the existing config — update the file in the persistent volume or remove it and redeploy.
 
 ### 3. Add a volume
 
@@ -107,7 +110,7 @@ Push to your repo (or click **Deploy** in Railway). The first deploy pulls the D
 
 Visit `https://<your-railway-domain>/overview` in your browser.
 
-1. Enter your `OPENCLAW_GATEWAY_TOKEN` and click **Connect**
+1. Enter your `OPENCLAW_GATEWAY_PASSWORD` and click **Connect**
 2. On first connect you'll see `disconnected (1008): pairing required` — this is normal. Approve the device using `railway ssh`:
    ```bash
    railway ssh
@@ -389,7 +392,8 @@ This always pulls the newest image but you lose reproducibility and rollback abi
 
 | Variable | Required | Description |
 |---|---|---|
-| `OPENCLAW_GATEWAY_TOKEN` | ✅ | Auth token for the gateway. Generate: `openssl rand -hex 32` |
+| `OPENCLAW_GATEWAY_PASSWORD` | ✅ | Password for the gateway / Control UI. Generate a long random value, e.g. `openssl rand -base64 32` |
+| `OPENCLAW_ALLOWED_ORIGIN` | ✅ | Exact HTTPS origin allowed to load the Control UI, e.g. `https://myclaw.up.railway.app` |
 | `PORT` | Recommended | Port for the gateway (default: `8080`) |
 | `OPENCLAW_STATE_DIR` | Baked in | State directory (default: `/data/.openclaw`) |
 | `OPENCLAW_WORKSPACE_DIR` | Baked in | Workspace directory (default: `/data/workspace`) |

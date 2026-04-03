@@ -19,16 +19,8 @@ jobs:
       - name: Get latest OpenClaw release tag
         id: latest
         run: |
-          # Query GHCR for the latest non-beta, non-arch-specific tag
-          TOKEN=$(curl -s "https://ghcr.io/token?scope=repository:openclaw/openclaw:pull" | jq -r '.token')
-          TAGS=$(curl -s -H "Authorization: Bearer $TOKEN" \
-            "https://ghcr.io/v2/openclaw/openclaw/tags/list" | jq -r '.tags[]')
-
-          # Filter: exclude arch-specific, beta, main, latest
-          LATEST=$(echo "$TAGS" \
-            | grep -E '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9]+)?$' \
-            | sort -V \
-            | tail -1)
+          LATEST=$(curl -fsSL https://api.github.com/repos/openclaw/openclaw/releases/latest \
+            | jq -r '.tag_name | ltrimstr("v")')
 
           echo "tag=$LATEST" >> "$GITHUB_OUTPUT"
           echo "Latest OpenClaw release: $LATEST"
@@ -37,7 +29,7 @@ jobs:
         id: current
         run: |
           # Read the version from Dockerfile ARG
-          CURRENT=$(grep -oP 'OPENCLAW_VERSION=\K[^ ]+' Dockerfile | head -1)
+          CURRENT=$(sed -n 's/^ARG OPENCLAW_VERSION=//p' Dockerfile | head -1)
           echo "tag=$CURRENT" >> "$GITHUB_OUTPUT"
           echo "Current pinned version: $CURRENT"
 
