@@ -1,6 +1,6 @@
-# OpenClaw on Railway
+# OpenClaw deployment template
 
-Deploy [OpenClaw](https://github.com/openclaw/openclaw) to [Railway](https://railway.com) in one click — fast, using the official pre-built Docker image.
+Deploy [OpenClaw](https://github.com/openclaw/openclaw) on [Railway](https://railway.com) or Kubernetes using a hardened, upstream-image-based template.
 
 [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/new/template?template=https://github.com/SamuelLHuber/railway-openclaw-template)
 
@@ -8,6 +8,7 @@ Deploy [OpenClaw](https://github.com/openclaw/openclaw) to [Railway](https://rai
 
 ## Table of contents
 
+- [Deployment options](#deployment-options)
 - [How it works](#how-it-works)
 - [Quick start](#quick-start)
 - [Step-by-step setup](#step-by-step-setup)
@@ -19,8 +20,36 @@ Deploy [OpenClaw](https://github.com/openclaw/openclaw) to [Railway](https://rai
 - [Environment variable reference](#environment-variable-reference)
 - [Health checks](#health-checks)
 - [Troubleshooting](#troubleshooting)
+- [Kubernetes](#kubernetes)
 - [vs codetitlan/openclaw-railway-template](#vs-codetitlanopenclaw-railway-template)
 - [Upstream documentation](#upstream-documentation)
+
+---
+
+## Deployment options
+
+### Railway
+
+This repo supports the Railway deployment path using:
+- `Dockerfile`
+- `railway.toml`
+- the instructions in this README
+
+### Kubernetes
+
+This repo also supports a universal Kubernetes path using:
+- Helm chart: `charts/openclaw/`
+- Kubernetes spec / rationale: `specs/k8s.md`
+- local validation references: `k8s/README.md`
+
+The supported Kubernetes packaging path is the Helm chart.
+The raw manifests under `k8s/` are validation/reference artifacts only.
+
+### Support matrix
+
+- Railway: supported
+- Kubernetes via Helm chart: supported
+- Raw manifests under `k8s/`: reference / validation only
 
 ---
 

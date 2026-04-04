@@ -1,0 +1,121 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "openclaw.fullname" . }}
+  namespace: {{ .Values.namespace.name | default .Release.Namespace }}
+  labels:
+{{ include "openclaw.labels" . | indent 4 }}
+spec:
+  replicas: 1
+  revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+{{ include "openclaw.matchLabels" . | indent 6 }}
+  template:
+    metadata:
+      labels:
+{{ include "openclaw.selectorLabels" . | indent 8 }}
+    spec:
+      serviceAccountName: {{ include "openclaw.fullname" . }}
+      automountServiceAccountToken: false
+      securityContext:
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: init-openclaw-state
+          image: {{ .Values.initContainer.image.repository }}:{{ .Values.initContainer.image.tag }}
+          imagePullPolicy: {{ .Values.initContainer.image.pullPolicy }}
+          command:
+            - sh
+            - -lc
+            - |
+              set -eu
+              mkdir -p /data/.openclaw /data/workspace
+              if [ ! -f /data/.openclaw/openclaw.json ]; then
+                cat > /data/.openclaw/openclaw.json <<EOF
+              {
+                agents: {
+                  defaults: {
+                    model: { primary: {{ .Values.openclaw.bootstrap.modelPrimary | quote }} },
+                  },
+                },
+                gateway: {
+                  port: 8080,
+                  auth: {
+                    mode: "password",
+                    password: "${OPENCLAW_GATEWAY_PASSWORD}",
+                  },
+                  controlUi: {
+                    allowedOrigins: ["${OPENCLAW_ALLOWED_ORIGIN}"],
+                  },
+                  {{- if .Values.openclaw.gateway.trustedProxies }}
+                  trustedProxies: [{{ range $i, $v := .Values.openclaw.gateway.trustedProxies }}{{ if $i }}, {{ end }}{{ $v | quote }}{{ end }}],
+                  {{- end }}
+                },
+              }
+              EOF
+              fi
+              chown -R 1000:1000 /data
+          envFrom:
+            - secretRef:
+                name: {{ include "openclaw.secretName" . }}
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+              add: ["CHOWN", "FOWNER", "DAC_OVERRIDE"]
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      containers:
+        - name: openclaw
+          image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["node", "openclaw.mjs", "gateway", "--allow-unconfigured", "--bind", "lan", "--port", "8080"]
+          env:
+            - name: HOME
+              value: /data
+            - name: OPENCLAW_STATE_DIR
+              value: /data/.openclaw
+            - name: OPENCLAW_WORKSPACE_DIR
+              value: /data/workspace
+            - name: OPENCLAW_GATEWAY_PORT
+              value: "8080"
+          envFrom:
+            - secretRef:
+                name: {{ include "openclaw.secretName" . }}
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "openclaw.fullname" . }}-data

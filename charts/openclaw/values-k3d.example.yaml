@@ -1,0 +1,27 @@
+namespace:
+  create: true
+  name: openclaw
+  labels:
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+
+secret:
+  create: true
+  gatewayPassword: change-me
+  allowedOrigin: https://openclaw.example.com
+
+persistence:
+  storageClassName: local-path
+
+httpRoute:
+  enabled: false
+
+networkPolicy:
+  ingressFrom:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: gateway-test
+      podSelector:
+        matchLabels:
+          access: openclaw-gateway

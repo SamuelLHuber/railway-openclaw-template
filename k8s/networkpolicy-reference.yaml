@@ -1,0 +1,129 @@
+# Reference NetworkPolicy set for OpenClaw.
+#
+# Security model:
+#
+# Allowed world:
+# - public internet egress
+# - DNS
+# - inbound only from the actual Gateway API dataplane path
+#
+# Forbidden world:
+# - Kubernetes API
+# - cluster services
+# - pod network
+# - service CIDRs
+# - node private subnets
+# - private RFC1918 destinations
+# - metadata endpoints
+#
+# Notes:
+# - Replace the namespace/pod selectors in the ingress allow rule so they match
+#   your actual Kubernetes Gateway API dataplane/controller implementation.
+# - This policy set reflects the validated model:
+#   * inbound allowed only from the Gateway/API dataplane path
+#   * outbound public internet allowed
+#   * outbound internal/private destinations blocked
+# - Do not tie NetworkPolicy to gateway.trustedProxies.
+#   * NetworkPolicy = who may connect
+#   * trustedProxies = whose forwarded headers OpenClaw may believe
+# - NetworkPolicy is required in the template.
+# - trustedProxies is recommended, but environment-specific.
+#
+# Adjust the excluded CIDRs to match your environment if needed.
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: openclaw-deny-ingress
+  namespace: openclaw
+spec:
+  podSelector:
+    matchLabels:
+      app: openclaw
+  policyTypes:
+    - Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: openclaw-allow-gateway-ingress
+  namespace: openclaw
+spec:
+  podSelector:
+    matchLabels:
+      app: openclaw
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        # Replace these selectors with your Gateway API dataplane/controller source.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: gateway-system
+          podSelector:
+            matchLabels:
+              access: openclaw-gateway
+      ports:
+        - protocol: TCP
+          port: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: openclaw-deny-egress
+  namespace: openclaw
+spec:
+  podSelector:
+    matchLabels:
+      app: openclaw
+  policyTypes:
+    - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: openclaw-allow-dns-egress
+  namespace: openclaw
+spec:
+  podSelector:
+    matchLabels:
+      app: openclaw
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: openclaw-allow-public-internet-egress
+  namespace: openclaw
+spec:
+  podSelector:
+    matchLabels:
+      app: openclaw
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+              - 100.64.0.0/10
+              - 169.254.0.0/16
+      ports:
+        - protocol: TCP
+          port: 80
+        - protocol: TCP
+          port: 443

@@ -1,0 +1,41 @@
+# Example values for a cluster that exposes apps through a shared Istio Gateway API Gateway.
+# Replace all placeholder values to match your environment.
+
+namespace:
+  create: true
+  name: openclaw
+  labels:
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+    istio-injection: "disabled"
+
+secret:
+  create: false
+  existingSecret: openclaw-secret
+
+persistence:
+  # Set this if your cluster requires a specific storage class.
+  storageClassName: ""
+
+httpRoute:
+  enabled: true
+  hostname: openclaw.example.com
+  parentRefs:
+    - name: shared-gateway
+      namespace: istio-system
+
+openclaw:
+  gateway:
+    # Optional and environment-specific.
+    # Set only when you know the stable proxy IP/CIDR OpenClaw should trust.
+    trustedProxies: []
+
+networkPolicy:
+  ingressFrom:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: istio-system
+      podSelector:
+        matchLabels:
+          gateway.networking.k8s.io/gateway-name: shared-gateway

@@ -1,0 +1,91 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "openclaw.fullname" . }}-deny-ingress
+  namespace: {{ .Values.namespace.name | default .Release.Namespace }}
+  labels:
+{{ include "openclaw.labels" . | indent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+{{ include "openclaw.matchLabels" . | indent 6 }}
+  policyTypes: [Ingress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "openclaw.fullname" . }}-allow-gateway-ingress
+  namespace: {{ .Values.namespace.name | default .Release.Namespace }}
+  labels:
+{{ include "openclaw.labels" . | indent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+{{ include "openclaw.matchLabels" . | indent 6 }}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+{{ toYaml .Values.networkPolicy.ingressFrom | indent 8 }}
+      ports:
+        - protocol: TCP
+          port: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "openclaw.fullname" . }}-deny-egress
+  namespace: {{ .Values.namespace.name | default .Release.Namespace }}
+  labels:
+{{ include "openclaw.labels" . | indent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+{{ include "openclaw.matchLabels" . | indent 6 }}
+  policyTypes: [Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "openclaw.fullname" . }}-allow-dns-egress
+  namespace: {{ .Values.namespace.name | default .Release.Namespace }}
+  labels:
+{{ include "openclaw.labels" . | indent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+{{ include "openclaw.matchLabels" . | indent 6 }}
+  policyTypes: [Egress]
+  egress:
+    - to:
+{{ toYaml .Values.networkPolicy.dnsTo | indent 8 }}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "openclaw.fullname" . }}-allow-public-internet-egress
+  namespace: {{ .Values.namespace.name | default .Release.Namespace }}
+  labels:
+{{ include "openclaw.labels" . | indent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+{{ include "openclaw.matchLabels" . | indent 6 }}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+{{ toYaml .Values.networkPolicy.publicInternetExceptCidrs | indent 14 }}
+      ports:
+        - protocol: TCP
+          port: 80
+        - protocol: TCP
+          port: 443
+{{- end }}

@@ -1,0 +1,20 @@
+OpenClaw has been installed.
+
+Next steps:
+
+1. Ensure secrets/provider keys are configured.
+2. Open the Control UI at the configured hostname if HTTPRoute is enabled.
+3. Log in with the configured gateway password.
+4. If the UI shows 'pairing required', approve the device.
+
+Useful commands:
+
+  kubectl -n {{ .Values.namespace.name | default .Release.Namespace }} rollout status deploy/{{ include "openclaw.fullname" . }} --timeout=300s
+  kubectl -n {{ .Values.namespace.name | default .Release.Namespace }} exec deploy/{{ include "openclaw.fullname" . }} -- sh -lc 'node openclaw.mjs devices list'
+  kubectl -n {{ .Values.namespace.name | default .Release.Namespace }} exec deploy/{{ include "openclaw.fullname" . }} -- sh -lc 'node openclaw.mjs devices approve <requestId>'
+
+{{- if .Values.httpRoute.enabled }}
+Control UI URL:
+
+  https://{{ .Values.httpRoute.hostname }}/overview
+{{- end }}

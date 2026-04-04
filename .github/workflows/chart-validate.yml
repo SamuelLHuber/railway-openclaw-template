@@ -1,0 +1,145 @@
+name: Validate OpenClaw Helm Chart
+
+on:
+  pull_request:
+    paths:
+      - 'charts/openclaw/**'
+      - 'k8s/**'
+      - 'specs/k8s.md'
+      - '.github/workflows/chart-validate.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'charts/openclaw/**'
+      - 'k8s/**'
+      - 'specs/k8s.md'
+      - '.github/workflows/chart-validate.yml'
+  workflow_dispatch:
+
+jobs:
+  lint-and-render:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+
+      - name: Lint chart with Istio Gateway values
+        run: helm lint charts/openclaw -f charts/openclaw/values-istio-gateway.example.yaml
+
+      - name: Lint chart with k3d values
+        run: helm lint charts/openclaw -f charts/openclaw/values-k3d.example.yaml
+
+      - name: Lint chart with existingSecret flow
+        run: |
+          helm lint charts/openclaw \
+            --set secret.create=false \
+            --set secret.existingSecret=openclaw-secret \
+            --set networkPolicy.ingressFrom[0].namespaceSelector.matchLabels.kubernetes\.io/metadata\.name=istio-system
+
+      - name: Render chart with Istio Gateway values
+        run: helm template openclaw charts/openclaw -f charts/openclaw/values-istio-gateway.example.yaml --namespace openclaw > /tmp/openclaw-istio-render.yaml
+
+      - name: Render chart with k3d values
+        run: helm template openclaw charts/openclaw -f charts/openclaw/values-k3d.example.yaml --namespace openclaw > /tmp/openclaw-k3d-render.yaml
+
+      - name: Validate rendered YAML parses
+        run: |
+          python3 - <<'PY'
+          import yaml
+          for path in ['/tmp/openclaw-istio-render.yaml', '/tmp/openclaw-k3d-render.yaml']:
+              with open(path, 'r', encoding='utf-8') as f:
+                  list(yaml.safe_load_all(f.read()))
+              print(f'validated {path}')
+          PY
+
+  k3d-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Install k3d
+        run: curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
+
+      - name: Create k3d cluster
+        run: k3d cluster create openclaw-chart-ci --servers 1 --agents 0 --wait
+
+      - name: Install chart in k3d
+        run: |
+          export KUBECONFIG=$(k3d kubeconfig write openclaw-chart-ci)
+          helm upgrade --install openclaw charts/openclaw \
+            --namespace openclaw --create-namespace \
+            -f charts/openclaw/values-k3d.example.yaml
+          kubectl -n openclaw rollout status deploy/openclaw --timeout=300s
+
+      - name: Validate runtime model
+        run: |
+          export KUBECONFIG=$(k3d kubeconfig write openclaw-chart-ci)
+          kubectl -n openclaw exec deploy/openclaw -- sh -lc 'id'
+          kubectl -n openclaw exec deploy/openclaw -- sh -lc 'test -e /var/run/secrets/kubernetes.io/serviceaccount && echo token-present || echo token-absent' | tee /tmp/sa-token-check.txt
+          grep -q 'token-absent' /tmp/sa-token-check.txt
+          kubectl -n openclaw exec deploy/openclaw -- sh -lc 'grep -n "primary\|allowedOrigins\|mode:\|password:" /data/.openclaw/openclaw.json'
+
+      - name: Validate NetworkPolicy behavior
+        run: |
+          export KUBECONFIG=$(k3d kubeconfig write openclaw-chart-ci)
+          PODIP=$(kubectl -n openclaw get pod -l app=openclaw -o jsonpath='{.items[0].status.podIP}')
+          cat <<'YAML' | kubectl apply -f -
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: gateway-test
+          ---
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: peer-test
+          ---
+          apiVersion: v1
+          kind: Pod
+          metadata:
+            name: gateway-client
+            namespace: gateway-test
+            labels:
+              access: openclaw-gateway
+          spec:
+            containers:
+              - name: curl
+                image: curlimages/curl:8.7.1
+                command: ["sh", "-lc", "sleep 3600"]
+          ---
+          apiVersion: v1
+          kind: Pod
+          metadata:
+            name: peer-client
+            namespace: peer-test
+          spec:
+            containers:
+              - name: curl
+                image: curlimages/curl:8.7.1
+                command: ["sh", "-lc", "sleep 3600"]
+          YAML
+          kubectl -n gateway-test wait --for=condition=Ready pod/gateway-client --timeout=120s
+          kubectl -n peer-test wait --for=condition=Ready pod/peer-client --timeout=120s
+          kubectl -n gateway-test exec gateway-client -- sh -lc "curl -sS --max-time 5 -o /dev/null -w '%{http_code}\n' http://$PODIP:8080/healthz" | tee /tmp/gateway-result.txt
+          grep -q '^200$' /tmp/gateway-result.txt
+          kubectl -n peer-test exec peer-client -- sh -lc "curl -sS --max-time 5 -o /dev/null -w '%{http_code}\n' http://$PODIP:8080/healthz || true" | tee /tmp/peer-result.txt
+          grep -q '^000$' /tmp/peer-result.txt
+          kubectl -n openclaw exec deploy/openclaw -- sh -lc 'curl -I -s https://api.github.com | head -1' | tee /tmp/public-egress.txt
+          grep -q 'HTTP/' /tmp/public-egress.txt
+          kubectl -n openclaw exec deploy/openclaw -- sh -lc 'curl -k -sS --max-time 5 -o /dev/null -w "%{http_code}\n" https://kubernetes.default.svc || true' | tee /tmp/kubeapi-result.txt
+          grep -q '^000$' /tmp/kubeapi-result.txt
+
+      - name: Cleanup k3d cluster
+        if: always()
+        run: k3d cluster delete openclaw-chart-ci
