@@ -1,21 +1,18 @@
-# OpenClaw on Kubernetes: local validation reference
+# OpenClaw on Kubernetes: local validation with Helm
 
-This directory contains reference manifests and notes for validating an OpenClaw Kubernetes deployment locally.
+This directory now exists only for Kubernetes validation documentation.
 
-These files are **reference artifacts**, not final production packaging.
-The supported portable Kubernetes packaging path for this repo is the Helm chart in `charts/openclaw/`.
+The supported Kubernetes deployment path for this repo is:
+- Helm chart: `charts/openclaw/`
 
-Included files:
-- `reference-k3d.yaml` — validated base deployment on `k3d`
-- `networkpolicy-reference.yaml` — validated reference NetworkPolicy model
-- `gatewayapi-envoy-k3d-reference.yaml` — validated local Gateway API routing example using Envoy Gateway
-- `../charts/openclaw/` — portable Helm chart for the hardened OpenClaw deployment model
+Raw Kubernetes manifests are no longer the source of truth.
 
 ---
 
 ## What this validates
 
-The local validation flow is intended to prove:
+The local validation flow is intended to prove that the Helm chart correctly deploys OpenClaw with the intended hardened model:
+
 - upstream OpenClaw image works on Kubernetes
 - `/data` PVC model works
 - seed-only init-container config model works
@@ -43,8 +40,7 @@ Forbidden world:
 - private RFC1918 destinations
 - metadata endpoints
 
-Also keep these controls separate:
-
+Keep these controls separate:
 - `NetworkPolicy` = who may connect and where OpenClaw may egress
 - `gateway.trustedProxies` = whose forwarded headers OpenClaw may believe
 
@@ -60,6 +56,7 @@ Required locally:
 - `docker`
 - `kubectl`
 - `k3d`
+- `helm`
 
 Optional but used in the validated Gateway API path:
 - internet access from the cluster to install Envoy Gateway manifests
@@ -82,24 +79,29 @@ kubectl get pods -A
 
 ---
 
-## 2. Deploy the validated base OpenClaw setup
+## 2. Install the chart in k3d
 
-Apply the base manifest:
+Use the provided local values file:
 
 ```bash
-kubectl apply -f k8s/reference-k3d.yaml
-kubectl -n openclaw rollout status deploy/openclaw --timeout=180s
+helm upgrade --install openclaw charts/openclaw \
+  --namespace openclaw \
+  --create-namespace \
+  -f charts/openclaw/values-k3d.example.yaml
+
+kubectl -n openclaw rollout status deploy/openclaw --timeout=300s
 kubectl -n openclaw get pods,pvc,svc -o wide
 ```
 
 What this gives you:
 - namespace `openclaw`
 - service account with `automountServiceAccountToken: false`
-- secret with bootstrap password/origin values
+- chart-managed Secret with bootstrap password/origin values
 - PVC mounted at `/data`
 - init container that seeds `openclaw.json` only if missing
 - upstream image deployment
 - `ClusterIP` service
+- chart-managed `NetworkPolicy`
 
 ---
 
@@ -185,7 +187,7 @@ kubectl -n openclaw rollout status deploy/openclaw --timeout=180s
 
 ---
 
-## 6. Verify public internet egress and baseline cluster reachability
+## 6. Verify public internet egress and cluster blocking
 
 Check public internet egress:
 
@@ -194,28 +196,26 @@ kubectl -n openclaw exec deploy/openclaw -- sh -lc \
   "curl -I -s https://api.github.com | head -1"
 ```
 
-Check Kubernetes API network reachability before NetworkPolicy:
+Check Kubernetes API network reachability after chart-managed NetworkPolicy:
 
 ```bash
 kubectl -n openclaw exec deploy/openclaw -- sh -lc \
-  "curl -k -sS -o /dev/null -w '%{http_code}\n' https://kubernetes.default.svc"
+  "curl -k -sS --max-time 5 -o /dev/null -w '%{http_code}\n' https://kubernetes.default.svc || true"
 ```
 
-Typical result before isolation:
+Expected result:
 - public internet works
-- Kubernetes API returns `401` (reachable but unauthorized)
-
-This demonstrates why network isolation is still required even when no service account token is mounted.
+- Kubernetes API returns `000` / connect failure
 
 ---
 
 ## 7. Validate NetworkPolicy behavior
 
-The reference policy assumes inbound traffic should come only from the Gateway dataplane path.
+The `values-k3d.example.yaml` file expects an allowed source namespace/pod:
+- namespace: `gateway-test`
+- label: `access=openclaw-gateway`
 
-For local validation, create synthetic allowed/disallowed clients first.
-
-Create a synthetic allowed source namespace/pod and disallowed peer pods:
+Create synthetic allowed and disallowed clients:
 
 ```bash
 cat <<'YAML' | kubectl apply -f -
@@ -252,29 +252,10 @@ spec:
     - name: curl
       image: curlimages/curl:8.7.1
       command: ["sh", "-lc", "sleep 3600"]
----
-apiVersion: v1
-kind: Pod
-metadata:
-  name: local-peer
-  namespace: openclaw
-spec:
-  containers:
-    - name: curl
-      image: curlimages/curl:8.7.1
-      command: ["sh", "-lc", "sleep 3600"]
 YAML
 
 kubectl -n gateway-test wait --for=condition=Ready pod/gateway-client --timeout=120s
 kubectl -n peer-test wait --for=condition=Ready pod/peer-client --timeout=120s
-kubectl -n openclaw wait --for=condition=Ready pod/local-peer --timeout=120s
-```
-
-Apply the reference NetworkPolicy:
-
-```bash
-kubectl apply -f k8s/networkpolicy-reference.yaml
-kubectl -n openclaw get networkpolicy
 ```
 
 Test ingress behavior:
@@ -287,77 +268,91 @@ kubectl -n gateway-test exec gateway-client -- sh -lc \
 
 kubectl -n peer-test exec peer-client -- sh -lc \
   "curl -sS --max-time 5 -o /dev/null -w '%{http_code}\n' http://$PODIP:8080/healthz || true"
-
-kubectl -n openclaw exec local-peer -- sh -lc \
-  "curl -sS --max-time 5 -o /dev/null -w '%{http_code}\n' http://$PODIP:8080/healthz || true"
 ```
 
 Expected:
 - `gateway-client` succeeds
 - `peer-client` fails
-- `local-peer` fails
 
 Test egress behavior:
 
 ```bash
-PEERIP=$(kubectl -n peer-test get pod peer-client -o jsonpath='{.status.podIP}')
+kubectl -n openclaw exec deploy/openclaw -- sh -lc \
+  'curl -I -s https://api.github.com | head -1'
 
 kubectl -n openclaw exec deploy/openclaw -- sh -lc \
-  "curl -I -s --max-time 10 https://api.github.com | head -1"
-
-kubectl -n openclaw exec deploy/openclaw -- sh -lc \
-  "curl -k -sS --max-time 5 -o /dev/null -w '%{http_code}\n' https://kubernetes.default.svc || true"
-
-kubectl -n openclaw exec deploy/openclaw -- sh -lc \
-  "curl -sS --max-time 5 -o /dev/null -w '%{http_code}\n' http://$PEERIP:80 || true"
+  'curl -k -sS --max-time 5 -o /dev/null -w "%{http_code}\n" https://kubernetes.default.svc || true'
 ```
 
 Expected:
 - public internet works
 - Kubernetes API is blocked
-- direct pod access is blocked
 
 ---
 
-## 8. Validate Gateway API routing locally with Envoy Gateway
+## 8. Optional: validate Gateway API locally with Envoy Gateway
 
-### 8.1 Install Envoy Gateway
+This is optional and outside the chart itself.
+It is only for proving that OpenClaw works behind a Gateway API dataplane path.
+
+### Install Envoy Gateway
 
 ```bash
 kubectl apply -f https://github.com/envoyproxy/gateway/releases/download/v1.5.4/install.yaml
 kubectl -n envoy-gateway-system rollout status deploy/envoy-gateway --timeout=180s
 ```
 
-Note:
-- in our local validation, the install produced one CRD-related warning/error late in the apply, but the Gateway dataplane still came up and routing worked
-- this is acceptable for local experimentation, not a production claim
-
-### 8.2 Apply the Gateway API reference
+### Create a simple local Gateway / Route
 
 ```bash
-kubectl apply -f k8s/gatewayapi-envoy-k3d-reference.yaml
-kubectl get gatewayclass,gateway,httproute -A -o wide
-kubectl -n openclaw describe gateway openclaw-gateway
-kubectl -n openclaw describe httproute openclaw-route
+cat <<'YAML' | kubectl apply -f -
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: eg
+spec:
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: openclaw-gateway
+  namespace: openclaw
+spec:
+  gatewayClassName: eg
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80
+      allowedRoutes:
+        namespaces:
+          from: Same
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: openclaw-route
+  namespace: openclaw
+spec:
+  parentRefs:
+    - name: openclaw-gateway
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: openclaw
+          port: 8080
+YAML
 ```
 
-### 8.3 Port-forward the Envoy dataplane service
-
-Find the generated Envoy service:
+Find the generated Envoy service and port-forward it:
 
 ```bash
 kubectl -n envoy-gateway-system get svc | grep openclaw
+kubectl -n envoy-gateway-system port-forward svc/<generated-service-name> 18080:80
 ```
-
-Port-forward it locally:
-
-```bash
-kubectl -n envoy-gateway-system port-forward svc/envoy-openclaw-openclaw-gateway-1dc42a2f 18080:80
-```
-
-If the generated service name differs, substitute the actual name.
-
-### 8.4 Verify routing
 
 In another shell:
 
@@ -366,74 +361,32 @@ curl -i -s http://127.0.0.1:18080/healthz | head -20
 curl -i -s http://127.0.0.1:18080/ | head -20
 ```
 
-Expected:
-- `200` from `/healthz`
-- Control UI HTML from `/`
+You should see OpenClaw responses through the Gateway dataplane.
 
----
+### Optional UI auth check
 
-## 9. Validate Control UI password auth through Gateway API
-
-For local browser testing, temporarily patch `allowedOrigins` to match the local forwarded URL.
-
-Patch the persisted config:
-
-```bash
-kubectl -n openclaw exec deploy/openclaw -- sh -lc \
-  "node -e 'const fs=require(\"fs\"); const p=\"/data/.openclaw/openclaw.json\"; let s=fs.readFileSync(p,\"utf8\"); s=s.replace(\"https://openclaw.example.com\",\"http://127.0.0.1:18080\"); fs.writeFileSync(p,s); console.log(s)'"
-```
-
-Restart OpenClaw:
-
-```bash
-kubectl -n openclaw rollout restart deploy/openclaw
-kubectl -n openclaw rollout status deploy/openclaw --timeout=180s
-```
-
-Open the UI in a browser:
+For local browser testing, update the persisted allowed origin to `http://127.0.0.1:18080`, restart OpenClaw, and then open:
 
 ```text
 http://127.0.0.1:18080/overview
 ```
 
-Validated local behavior:
-- UI loads
-- password is required
-- after entering the correct password, device pairing is still required
-- after approving the device, the dashboard connects successfully
-
-### Pair a pending device
-
-List pending devices:
-
-```bash
-kubectl -n openclaw exec deploy/openclaw -- sh -lc 'node openclaw.mjs devices list'
-```
-
-Approve the request:
-
-```bash
-kubectl -n openclaw exec deploy/openclaw -- sh -lc 'node openclaw.mjs devices approve <requestId>'
-```
-
-Then reconnect in the browser.
+This proves password auth and pairing behavior through the proxied path.
 
 ---
 
-## 10. Important production follow-up: trusted proxies
+## Production follow-through
 
-During Gateway API testing, OpenClaw may log warnings indicating proxy headers were received from an untrusted address unless `gateway.trustedProxies` is configured for that environment.
+For production use:
+- use the Helm chart in `charts/openclaw/`
+- use `charts/openclaw/README.md` as the primary operator-facing Kubernetes guide
+- use `specs/k8s.md` for the security model, rationale, and validated findings
 
-Implication:
-- `gateway.trustedProxies` is **recommended** for proxied/Gateway deployments
-- it is **not required** in this portable reference template because the correct value is deployment-specific
-- if used, it should contain the smallest stable trusted proxy range for the actual dataplane/proxy path
-
-This is a production tuning item, not a portable hardcoded baseline.
+This directory is intentionally limited to local validation guidance.
 
 ---
 
-## 11. Cleanup
+## Cleanup
 
 Delete the local cluster:
 
@@ -443,23 +396,13 @@ k3d cluster delete openclaw-test
 
 ---
 
-## Production follow-through
-
-For production use:
-
-- use the Helm chart in `charts/openclaw/`
-- use `charts/openclaw/README.md` as the primary operator-facing Kubernetes guide
-- use `specs/k8s.md` for the security model, rationale, and validated findings
-
-This `k8s/` directory remains focused on local validation and reference manifests only.
-
 ## Notes / limitations
 
-- These artifacts are intentionally focused on validated local behavior, not final production hardening completeness.
+- These validation steps are intentionally focused on local Helm-backed behavior, not final production hardening completeness.
 - Production still needs:
   - real HTTPS/TLS
   - final public hostname
   - final `OPENCLAW_ALLOWED_ORIGIN`
-  - final `gateway.trustedProxies`
-  - final Gateway dataplane selectors in `NetworkPolicy`
+  - optional `gateway.trustedProxies`
+  - final Gateway dataplane selectors in `networkPolicy.ingressFrom`
   - backup implementation in a later phase
