@@ -1,0 +1,40 @@
+# Cluster-specific values for hoth
+# Usage:
+# helm upgrade --install openclaw ./charts/openclaw -n openclaw -f k8s/values-hoth.yaml
+
+namespace:
+  create: false
+  name: openclaw
+  labels:
+    istio-injection: disabled
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+
+secret:
+  create: false
+  existingSecret: openclaw-secret
+
+persistence:
+  storageClassName: local-path
+
+httpRoute:
+  enabled: true
+  hostname: openclaw.kirmes.io
+  parentRefs:
+    - name: dtech-gateway
+      namespace: istio-system
+
+openclaw:
+  gateway:
+    trustedProxies:
+      - 10.42.0.46/32
+
+networkPolicy:
+  ingressFrom:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: istio-system
+      podSelector:
+        matchLabels:
+          gateway.networking.k8s.io/gateway-name: dtech-gateway

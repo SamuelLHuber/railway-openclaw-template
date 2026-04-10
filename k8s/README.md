@@ -2,6 +2,8 @@
 
 This directory now exists only for Kubernetes validation documentation.
 
+For the live hoth cluster values file used by Helm, see `k8s/values-hoth.yaml`.
+
 The supported Kubernetes deployment path for this repo is:
 - Helm chart: `charts/openclaw/`
 
