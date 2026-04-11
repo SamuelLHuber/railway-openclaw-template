@@ -407,4 +407,4 @@ k3d cluster delete openclaw-test
   - final `OPENCLAW_ALLOWED_ORIGIN`
   - optional `gateway.trustedProxies`
   - final Gateway dataplane selectors in `networkPolicy.ingressFrom`
-  - backup implementation in a later phase
+  - backup/restore runbook in `charts/openclaw/README.md` (restic-backed CronJob + restore Job)

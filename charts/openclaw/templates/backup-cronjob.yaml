@@ -1,0 +1,108 @@
+{{- $backupArchive := .Values.backup.archive | default (dict) }}
+{{- $includeWorkspace := get $backupArchive "includeWorkspace" | default true }}
+{{- $onlyConfig := get $backupArchive "onlyConfig" | default false }}
+{{- if .Values.backup.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "openclaw.fullname" . }}-backup
+  namespace: {{ .Values.namespace.name | default .Release.Namespace }}
+  labels:
+{{ include "openclaw.labels" . | indent 4 }}
+spec:
+  schedule: {{ .Values.backup.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: {{ .Values.backup.successfulJobsHistoryLimit }}
+  failedJobsHistoryLimit: {{ .Values.backup.failedJobsHistoryLimit }}
+  jobTemplate:
+    spec:
+      backoffLimit: {{ .Values.backup.backoffLimit }}
+      template:
+        metadata:
+          labels:
+{{ include "openclaw.selectorLabels" . | indent 12 }}
+            app.kubernetes.io/component: backup
+        spec:
+          serviceAccountName: {{ include "openclaw.fullname" . }}
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          securityContext:
+            fsGroup: 1000
+            seccompProfile:
+              type: RuntimeDefault
+          initContainers:
+            - name: create-openclaw-backup
+              image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              command:
+                - sh
+                - -lc
+                - |
+                  set -eu
+                  archive="/backup/openclaw-backup.tar.gz"
+                  openclaw backup create --output "${archive}" --verify{{- if and (not $includeWorkspace) (not $onlyConfig) }} --no-include-workspace{{- end }}{{- if $onlyConfig }} --only-config{{- end }}
+                  ls -lh "${archive}"
+              env:
+                - name: HOME
+                  value: /data
+                - name: OPENCLAW_STATE_DIR
+                  value: /data/.openclaw
+                - name: OPENCLAW_WORKSPACE_DIR
+                  value: /data/workspace
+              securityContext:
+                runAsUser: 1000
+                runAsGroup: 1000
+                runAsNonRoot: true
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
+              volumeMounts:
+                - name: data
+                  mountPath: /data
+                  readOnly: true
+                - name: backup-tmp
+                  mountPath: /backup
+          containers:
+            - name: restic
+              image: {{ .Values.backup.restic.image.repository }}:{{ .Values.backup.restic.image.tag }}
+              imagePullPolicy: {{ .Values.backup.restic.image.pullPolicy }}
+              command:
+                - sh
+                - -lc
+                - |
+                  set -eu
+                  archive="/backup/openclaw-backup.tar.gz"
+                  if [ ! -f "${archive}" ]; then
+                    echo "No backup archive found at ${archive}"
+                    exit 1
+                  fi
+
+                  restic snapshots >/dev/null 2>&1 || restic init
+                  restic backup "${archive}" --host {{ include "openclaw.fullname" . | quote }} --tag openclaw --tag kubernetes
+                  restic forget --keep-hourly {{ .Values.backup.retention.keepHourly }} --keep-daily {{ .Values.backup.retention.keepDaily }} --prune
+                  rm -f "${archive}"
+              env:
+                - name: XDG_CACHE_HOME
+                  value: /tmp/.cache
+              envFrom:
+                - secretRef:
+                    name: {{ include "openclaw.backupSecretName" . }}
+              securityContext:
+                runAsUser: 1000
+                runAsGroup: 1000
+                runAsNonRoot: true
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
+              volumeMounts:
+                - name: backup-tmp
+                  mountPath: /backup
+                - name: data
+                  mountPath: /data
+          volumes:
+            - name: data
+              persistentVolumeClaim:
+                claimName: {{ include "openclaw.fullname" . }}-data
+            - name: backup-tmp
+              emptyDir: {}
+{{- end }}

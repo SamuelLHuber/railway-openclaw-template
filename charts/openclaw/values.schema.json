@@ -92,6 +92,53 @@
           "items": { "type": "string", "minLength": 1 }
         }
       }
+    },
+    "backup": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "schedule": { "type": "string", "minLength": 1 },
+        "successfulJobsHistoryLimit": { "type": "integer", "minimum": 0 },
+        "failedJobsHistoryLimit": { "type": "integer", "minimum": 0 },
+        "backoffLimit": { "type": "integer", "minimum": 0 },
+        "archive": {
+          "type": "object",
+          "properties": {
+            "includeWorkspace": { "type": "boolean" },
+            "onlyConfig": { "type": "boolean" }
+          }
+        },
+        "restic": {
+          "type": "object",
+          "properties": {
+            "createSecret": { "type": "boolean" },
+            "existingSecret": { "type": "string" },
+            "repository": { "type": "string" },
+            "password": { "type": "string" },
+            "extraEnv": {
+              "type": "object",
+              "additionalProperties": { "type": "string" }
+            }
+          }
+        },
+        "retention": {
+          "type": "object",
+          "properties": {
+            "keepHourly": { "type": "integer", "minimum": 1 },
+            "keepDaily": { "type": "integer", "minimum": 1 }
+          }
+        }
+      }
+    },
+    "restore": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "runId": { "type": "string" },
+        "snapshot": { "type": "string", "minLength": 1 },
+        "existingSecret": { "type": "string" },
+        "preserveCurrentState": { "type": "boolean" }
+      }
     }
   },
   "allOf": [
@@ -162,6 +209,110 @@
             "required": ["ingressFrom", "dnsTo", "publicInternetExceptCidrs"],
             "properties": {
               "ingressFrom": { "minItems": 1 }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "backup": {
+            "properties": { "enabled": { "const": true } },
+            "required": ["enabled"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "backup": {
+            "required": ["schedule", "restic", "retention"],
+            "properties": {
+              "retention": {
+                "required": ["keepHourly", "keepDaily"]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "backup": {
+            "properties": {
+              "enabled": { "const": true },
+              "restic": {
+                "properties": { "createSecret": { "const": true } },
+                "required": ["createSecret"]
+              }
+            },
+            "required": ["enabled", "restic"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "backup": {
+            "properties": {
+              "restic": {
+                "required": ["repository", "password"],
+                "properties": {
+                  "repository": { "minLength": 1 },
+                  "password": { "minLength": 1 }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "backup": {
+            "properties": {
+              "enabled": { "const": true },
+              "restic": {
+                "properties": { "createSecret": { "const": false } },
+                "required": ["createSecret"]
+              }
+            },
+            "required": ["enabled", "restic"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "backup": {
+            "properties": {
+              "restic": {
+                "required": ["existingSecret"],
+                "properties": {
+                  "existingSecret": { "minLength": 1 }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "restore": {
+            "properties": { "enabled": { "const": true } },
+            "required": ["enabled"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "restore": {
+            "required": ["runId", "snapshot"],
+            "properties": {
+              "runId": { "minLength": 1 },
+              "snapshot": { "minLength": 1 }
             }
           }
         }

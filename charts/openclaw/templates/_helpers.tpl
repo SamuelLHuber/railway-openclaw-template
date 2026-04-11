@@ -39,3 +39,19 @@ app: openclaw
 {{- printf "%s-secret" (include "openclaw.fullname" .) -}}
 {{- end -}}
 {{- end -}}
+
+{{- define "openclaw.backupSecretName" -}}
+{{- if .Values.backup.restic.existingSecret -}}
+{{- .Values.backup.restic.existingSecret -}}
+{{- else -}}
+{{- printf "%s-backup-restic" (include "openclaw.fullname" .) -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "openclaw.restoreSecretName" -}}
+{{- if .Values.restore.existingSecret -}}
+{{- .Values.restore.existingSecret -}}
+{{- else -}}
+{{- include "openclaw.backupSecretName" . -}}
+{{- end -}}
+{{- end -}}

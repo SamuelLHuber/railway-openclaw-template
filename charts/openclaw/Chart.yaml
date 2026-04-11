@@ -2,5 +2,5 @@ apiVersion: v2
 name: openclaw
 description: Hardened singleton OpenClaw deployment with PVC, seed-only init, Gateway API exposure, and namespace-scoped NetworkPolicy.
 type: application
-version: 0.1.0
-appVersion: "2026.4.2"
+version: 0.3.0
+appVersion: "2026.4.9"

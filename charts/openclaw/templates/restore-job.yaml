@@ -1,0 +1,144 @@
+{{- if .Values.restore.enabled }}
+{{- $runId := required "restore.runId is required when restore.enabled=true" .Values.restore.runId -}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ printf "%s-restore-%s" (include "openclaw.fullname" .) ($runId | lower | replace "_" "-") | trunc 63 | trimSuffix "-" }}
+  namespace: {{ .Values.namespace.name | default .Release.Namespace }}
+  labels:
+{{ include "openclaw.labels" . | indent 4 }}
+    app.kubernetes.io/component: restore
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+{{ include "openclaw.selectorLabels" . | indent 8 }}
+        app.kubernetes.io/component: restore
+    spec:
+      serviceAccountName: {{ include "openclaw.fullname" . }}
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: restic-restore
+          image: {{ .Values.backup.restic.image.repository }}:{{ .Values.backup.restic.image.tag }}
+          imagePullPolicy: {{ .Values.backup.restic.image.pullPolicy }}
+          command:
+            - sh
+            - -lc
+            - |
+              set -eu
+              target="/restore/restic"
+              archive="/restore/openclaw-backup.tar.gz"
+              mkdir -p "${target}"
+              restic restore {{ .Values.restore.snapshot | quote }} --target "${target}"
+
+              found="$(find "${target}" -type f -name 'openclaw-backup.tar.gz' | head -n 1)"
+              if [ -z "${found}" ]; then
+                echo "No OpenClaw backup archive found in restored snapshot"
+                exit 1
+              fi
+              cp -f "${found}" "${archive}"
+              ls -lh "${archive}"
+          env:
+            - name: XDG_CACHE_HOME
+              value: /tmp/.cache
+          envFrom:
+            - secretRef:
+                name: {{ include "openclaw.restoreSecretName" . }}
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: restore-tmp
+              mountPath: /restore
+            - name: data
+              mountPath: /data
+        - name: verify-openclaw-backup
+          image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - sh
+            - -lc
+            - |
+              set -eu
+              openclaw backup verify /restore/openclaw-backup.tar.gz
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: restore-tmp
+              mountPath: /restore
+      containers:
+        - name: apply-restore
+          image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - sh
+            - -lc
+            - |
+              set -eu
+              timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
+              unpack_dir="/restore/unpacked"
+              archive="/restore/openclaw-backup.tar.gz"
+              mkdir -p "${unpack_dir}"
+              tar -xzf "${archive}" -C "${unpack_dir}"
+
+              root_dir="$(find "${unpack_dir}" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
+              if [ -z "${root_dir}" ]; then
+                echo "Could not find extracted backup root directory"
+                exit 1
+              fi
+
+              payload_data_dir="${root_dir}/payload/posix/data"
+              if [ ! -d "${payload_data_dir}" ]; then
+                echo "Could not find payload data directory: ${payload_data_dir}"
+                exit 1
+              fi
+
+              mkdir -p /data
+              {{- if .Values.restore.preserveCurrentState }}
+              if [ -d /data/.openclaw ]; then
+                mv /data/.openclaw "/data/.openclaw.pre-restore-${timestamp}"
+              fi
+              if [ -d /data/workspace ]; then
+                mv /data/workspace "/data/workspace.pre-restore-${timestamp}"
+              fi
+              {{- else }}
+              rm -rf /data/.openclaw /data/workspace
+              {{- end }}
+
+              cp -a "${payload_data_dir}/." /data/
+              echo "Restore applied to /data"
+              ls -la /data | sed -n '1,60p'
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: restore-tmp
+              mountPath: /restore
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "openclaw.fullname" . }}-data
+        - name: restore-tmp
+          emptyDir: {}
+{{- end }}
