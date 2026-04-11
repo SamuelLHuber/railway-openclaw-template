@@ -1,6 +1,6 @@
 # OpenClaw Helm chart
 
-> ⚠️ **Root runtime warning (custom tools / apt):** If you set `openclaw.runtimeAsRoot=true`, the main OpenClaw container runs as `root` so the agent can install system tools directly at runtime (for example with `apt` and similar package managers). This is convenient, but it weakens the chart's default hardening model. Keep this disabled unless you explicitly want runtime system package installation.
+> ⚠️ **Root runtime warning (custom tools / apt):** If you set `openclaw.runtimeAsRoot=true`, the main OpenClaw container runs as `root`. For standard `apt`/package-manager behavior inside the running container, also set `openclaw.runtimePackageManagerCompat=true` (adds package-manager-related Linux capabilities). This is convenient, but it weakens the chart's default hardening model. Keep these disabled unless you explicitly want runtime system package installation.
 
 Portable, hardened OpenClaw chart derived from the validated Kubernetes deployment model.
 
@@ -23,7 +23,8 @@ Recommended production pattern:
 ## Security model
 
 Allowed world:
-- public internet egress
+- public internet egress (HTTP/HTTPS)
+- mail egress (SMTP/IMAP/POP ports, configurable)
 - DNS
 - inbound only from the actual Gateway API dataplane path
 
@@ -42,6 +43,8 @@ Keep these controls separate:
 
 For the chart:
 - `networkPolicy` is enabled by default
+- `networkPolicy.denyEgress=true` by default (set `false` to disable chart-managed egress restriction)
+- `networkPolicy.allowMailEgress=true` by default
 - `trustedProxies` is optional and environment-specific
 
 ## What the chart deploys
@@ -85,6 +88,14 @@ If exposing through Gateway API:
 If `networkPolicy.enabled=true`, set the actual Gateway dataplane peers that may reach OpenClaw:
 
 - `networkPolicy.ingressFrom=[...]`
+
+Optional egress controls:
+
+- `networkPolicy.denyEgress=true|false` (default `true`)
+- `networkPolicy.allowMailEgress=true|false` (default `true`)
+- `networkPolicy.mailPorts=[25,110,143,465,587,993]` (default)
+
+When `networkPolicy.denyEgress=true`, the chart allows DNS + HTTP/HTTPS egress and (optionally) mail egress to public internet destinations while still excluding private CIDRs via `networkPolicy.publicInternetExceptCidrs`.
 
 This is cluster-specific by design.
 

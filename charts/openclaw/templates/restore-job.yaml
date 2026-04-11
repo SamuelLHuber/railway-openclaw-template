@@ -57,6 +57,8 @@ spec:
             allowPrivilegeEscalation: false
             capabilities:
               drop: ["ALL"]
+          resources:
+{{ toYaml .Values.restore.resources.resticRestore | indent 12 }}
           volumeMounts:
             - name: restore-tmp
               mountPath: /restore
@@ -78,6 +80,8 @@ spec:
             allowPrivilegeEscalation: false
             capabilities:
               drop: ["ALL"]
+          resources:
+{{ toYaml .Values.restore.resources.verifyBackup | indent 12 }}
           volumeMounts:
             - name: restore-tmp
               mountPath: /restore
@@ -130,6 +134,8 @@ spec:
             allowPrivilegeEscalation: false
             capabilities:
               drop: ["ALL"]
+          resources:
+{{ toYaml .Values.restore.resources.applyRestore | indent 12 }}
           volumeMounts:
             - name: restore-tmp
               mountPath: /restore

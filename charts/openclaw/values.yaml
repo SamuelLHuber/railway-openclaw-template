@@ -18,6 +18,22 @@ initContainer:
     tag: "1.36"
     pullPolicy: IfNotPresent
 
+resources:
+  openclaw:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 2Gi
+  initContainer:
+    requests:
+      cpu: 25m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
 secret:
   create: true
   existingSecret: ""
@@ -36,6 +52,7 @@ openclaw:
   gateway:
     trustedProxies: []
   runtimeAsRoot: false
+  runtimePackageManagerCompat: false
 
 httpRoute:
   enabled: false
@@ -44,6 +61,15 @@ httpRoute:
 
 networkPolicy:
   enabled: true
+  denyEgress: true
+  allowMailEgress: true
+  mailPorts:
+    - 25
+    - 110
+    - 143
+    - 465
+    - 587
+    - 993
   ingressFrom: []
   dnsTo:
     - namespaceSelector:
@@ -68,6 +94,21 @@ backup:
   archive:
     includeWorkspace: true
     onlyConfig: false
+  resources:
+    createBackup:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 1Gi
+    restic:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 1Gi
   restic:
     image:
       repository: restic/restic
@@ -88,3 +129,25 @@ restore:
   snapshot: "latest"
   existingSecret: ""
   preserveCurrentState: true
+  resources:
+    resticRestore:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 1Gi
+    verifyBackup:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 1Gi
+    applyRestore:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: "1"
+        memory: 2Gi

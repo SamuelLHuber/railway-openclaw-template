@@ -70,6 +70,8 @@ spec:
             capabilities:
               drop: ["ALL"]
               add: ["CHOWN", "FOWNER", "DAC_OVERRIDE"]
+          resources:
+{{ toYaml .Values.resources.initContainer | indent 12 }}
           volumeMounts:
             - name: data
               mountPath: /data
@@ -118,6 +120,11 @@ spec:
             allowPrivilegeEscalation: false
             capabilities:
               drop: ["ALL"]
+              {{- if and .Values.openclaw.runtimeAsRoot .Values.openclaw.runtimePackageManagerCompat }}
+              add: ["CHOWN", "DAC_OVERRIDE", "FOWNER", "SETGID", "SETUID"]
+              {{- end }}
+          resources:
+{{ toYaml .Values.resources.openclaw | indent 12 }}
           volumeMounts:
             - name: data
               mountPath: /data

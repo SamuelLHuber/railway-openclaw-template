@@ -30,6 +30,7 @@ spec:
       ports:
         - protocol: TCP
           port: 8080
+{{- if .Values.networkPolicy.denyEgress }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -88,4 +89,31 @@ spec:
           port: 80
         - protocol: TCP
           port: 443
+{{- if .Values.networkPolicy.allowMailEgress }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "openclaw.fullname" . }}-allow-mail-egress
+  namespace: {{ .Values.namespace.name | default .Release.Namespace }}
+  labels:
+{{ include "openclaw.labels" . | indent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+{{ include "openclaw.matchLabels" . | indent 6 }}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+{{ toYaml .Values.networkPolicy.publicInternetExceptCidrs | indent 14 }}
+      ports:
+{{- range .Values.networkPolicy.mailPorts }}
+        - protocol: TCP
+          port: {{ . }}
+{{- end }}
+{{- end }}
+{{- end }}
 {{- end }}

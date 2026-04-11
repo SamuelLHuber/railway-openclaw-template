@@ -15,8 +15,27 @@ secret:
   create: false
   existingSecret: openclaw-secret
 
+image:
+  tag: 2026.4.9
+
 persistence:
   storageClassName: local-path
+
+resources:
+  openclaw:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: "2"
+      memory: 4Gi
+  initContainer:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 512Mi
 
 httpRoute:
   enabled: true
@@ -26,11 +45,22 @@ httpRoute:
       namespace: istio-system
 
 openclaw:
+  runtimeAsRoot: true
+  runtimePackageManagerCompat: true
   gateway:
     trustedProxies:
       - 10.42.0.46/32
 
 networkPolicy:
+  denyEgress: true
+  allowMailEgress: true
+  mailPorts:
+    - 25
+    - 110
+    - 143
+    - 465
+    - 587
+    - 993
   ingressFrom:
     - namespaceSelector:
         matchLabels:
@@ -38,3 +68,62 @@ networkPolicy:
       podSelector:
         matchLabels:
           gateway.networking.k8s.io/gateway-name: dtech-gateway
+
+backup:
+  enabled: true
+  schedule: "5 * * * *"
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 2
+  backoffLimit: 1
+  archive:
+    includeWorkspace: true
+    onlyConfig: false
+  resources:
+    createBackup:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: "1"
+        memory: 2Gi
+    restic:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: "1"
+        memory: 2Gi
+  restic:
+    createSecret: true
+    repository: /data/restic-repo
+    password: openclaw-local-restic-password
+  retention:
+    keepHourly: 12
+    keepDaily: 7
+
+restore:
+  enabled: false
+  snapshot: latest
+  preserveCurrentState: true
+  resources:
+    resticRestore:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: "1"
+        memory: 2Gi
+    verifyBackup:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: "1"
+        memory: 2Gi
+    applyRestore:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+      limits:
+        cpu: "2"
+        memory: 4Gi
