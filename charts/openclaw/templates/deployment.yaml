@@ -106,9 +106,15 @@ spec:
             initialDelaySeconds: 15
             periodSeconds: 20
           securityContext:
+            {{- if .Values.openclaw.runtimeAsRoot }}
+            runAsUser: 0
+            runAsGroup: 0
+            runAsNonRoot: false
+            {{- else }}
             runAsUser: 1000
             runAsGroup: 1000
             runAsNonRoot: true
+            {{- end }}
             allowPrivilegeEscalation: false
             capabilities:
               drop: ["ALL"]

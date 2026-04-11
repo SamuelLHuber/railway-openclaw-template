@@ -1,5 +1,7 @@
 # OpenClaw Helm chart
 
+> ⚠️ **Root runtime warning (custom tools / apt):** If you set `openclaw.runtimeAsRoot=true`, the main OpenClaw container runs as `root` so the agent can install system tools directly at runtime (for example with `apt` and similar package managers). This is convenient, but it weakens the chart's default hardening model. Keep this disabled unless you explicitly want runtime system package installation.
+
 Portable, hardened OpenClaw chart derived from the validated Kubernetes deployment model.
 
 ## Intended GitOps shape
